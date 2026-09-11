@@ -4,7 +4,7 @@ Architecture: ${ARCHITECTURE}
 Maintainer: Hope2333(幽零小喵) <u0catmiao@proton.me>
 Section: utils
 Priority: optional
-Replaces: opencode, opencode-glibc
-Breaks: opencode, opencode-glibc (<< ${OPENCODE_VERSION})
+Replaces: opencode-glibc
+Breaks: opencode-glibc (<< ${OPENCODE_VERSION})
 Conflicts: opencode, opencode-native, opencode-compressed
 Description: Open source coding agent for Termux with TTY+lock cleanup
