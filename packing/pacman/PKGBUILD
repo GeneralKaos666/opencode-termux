@@ -6,7 +6,7 @@ arch=('aarch64')
 url='https://github.com/anomalyco/opencode'
 license=('MIT')
 options=('!strip' '!debug' '!emptydirs')
-replaces=('opencode')
+replaces=('opencode' 'opencode-glibc')
 conflicts=('opencode' 'opencode-compressed')
 
 makedepends=()
