@@ -7,14 +7,14 @@ source "$ROOT_DIR/scripts/common.sh"
 OPENCODE_SRC_DIR="${OPENCODE_SRC_DIR:-$ROOT_DIR/sources/opencode/repo}"
 OUT_DIR="${OPENCODE_OUT_DIR:-$ROOT_DIR/artifacts/staged}"
 
-# STANDALONE=1 stages the opencode-glibc-standalone layout (lib/opencode-glibc/
-# + bin/opencode-glibc launcher) into a separate prefix so the standalone
+# STANDALONE=1 stages the opencode-wrapper-standalone layout (lib/opencode-wrapper/
+# + bin/opencode-wrapper launcher) into a separate prefix so the standalone
 # packages never mix with the glibc mainline tree (both deb packagers copy the
 # whole staged prefix into the package).
 STANDALONE="${STANDALONE:-0}"
 if [[ "$STANDALONE" == "1" ]]; then
 	PREFIX_DIR="${OPENCODE_PREFIX_DIR:-$OUT_DIR/prefix-standalone}"
-	LIB_DIR="$PREFIX_DIR/lib/opencode-glibc"
+	LIB_DIR="$PREFIX_DIR/lib/opencode-wrapper"
 else
 	PREFIX_DIR="${OPENCODE_PREFIX_DIR:-$OUT_DIR/prefix}"
 	LIB_DIR="$PREFIX_DIR/lib/opencode"
@@ -57,10 +57,10 @@ if [[ -f "$BUNDLE_INPUT" ]]; then
 fi
 
 if [[ "$STANDALONE" == "1" ]]; then
-	# Standalone entry is the bash launcher (repo bin/opencode-glibc); it
-	# resolves the runtime via ../lib/opencode-glibc/runtime/opencode.
-	[[ -f "$ROOT_DIR/bin/opencode-glibc" ]] || fail "missing launcher: bin/opencode-glibc"
-	install -m 755 "$ROOT_DIR/bin/opencode-glibc" "$PREFIX_DIR/bin/opencode-glibc"
+	# Standalone entry is the bash launcher (repo bin/opencode-wrapper); it
+	# resolves the runtime via ../lib/opencode-wrapper/runtime/opencode.
+	[[ -f "$ROOT_DIR/bin/opencode-wrapper" ]] || fail "missing launcher: bin/opencode-wrapper"
+	install -m 755 "$ROOT_DIR/bin/opencode-wrapper" "$PREFIX_DIR/bin/opencode-wrapper"
 else
 	# bin-direct: packaged bin/opencode IS the wrapped runtime ELF itself
 	ln -f "$LIB_DIR/runtime/opencode" "$PREFIX_DIR/bin/opencode" 2>/dev/null || \

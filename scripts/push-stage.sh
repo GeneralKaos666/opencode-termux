@@ -30,8 +30,8 @@ echo ""
 ASSETS=()
 if echo "$BATCH" | grep -q "prebatch"; then
     echo "Collecting prebatch assets..."
-    for f in "$REPO/packing/dpkg/opencode-glibc_"*.deb \
-             "$REPO/packing/pacman/opencode-glibc-"*.pkg.* \
+    for f in "$REPO/packing/dpkg/opencode-wrapper_"*.deb \
+             "$REPO/packing/pacman/opencode-wrapper-"*.pkg.* \
              "$REPO/packing/dpkg-native/opencode_"*.deb \
              "$REPO/packing/pacman/opencode-"*.pkg.*; do
         [ -f "$f" ] && ASSETS+=("$f") && echo "  $(basename "$f")"
@@ -43,10 +43,10 @@ if echo "$BATCH" | grep -q "push260905"; then
     for i in $(seq 15 27); do
         v="1.18.$i"
         for f in \
-            "$REPO/packing/dpkg/opencode-glibc_${v}_aarch64.deb" \
+            "$REPO/packing/dpkg/opencode-wrapper_${v}_aarch64.deb" \
             "$REPO/packing/dpkg-native/opencode_${v}_aarch64.deb" \
             "$REPO/packing/pacman/opencode-${v}-1-aarch64.pkg.tar.xz" \
-            "$REPO/packing/pacman/opencode-glibc-${v}-1-aarch64.pkg.tar.xz"; do
+            "$REPO/packing/pacman/opencode-wrapper-${v}-1-aarch64.pkg.tar.xz"; do
             if [ ! -f "$f" ]; then
                 echo "ERROR: missing expected file: $f" >&2
                 exit 1
@@ -111,9 +111,9 @@ Supersedes Push260903 (demoted old batch). Compressed family assets arrive via t
 
 ## Families
 - **opencode**: Native bionic mainline (stable since 27/28). Zero glibc deps.
-- **opencode-glibc**: Glibc wrapper (appendix, renamed).
+- **opencode-wrapper**: Glibc wrapper (appendix, renamed).
 - **opencode-compressed**: UPX-compressed variant.
-- **opencode-glibc-standalone**: Single-version rollback (coexists with opencode).
+- **opencode-wrapper-standalone**: Single-version rollback (coexists with opencode).
 
 ## Installation
 See docs/dual-track-install.md

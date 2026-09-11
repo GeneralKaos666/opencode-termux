@@ -131,9 +131,9 @@ deb:
 	MAINTAINER='$(PACKAGER_NAME)' ./scripts/package/package_deb.sh
 	@if [ "$(OUTPUT_ROOT)" != "$(CURDIR)/packing" ]; then \
 		if [ "$(MIX)" = "1" ]; then \
-			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/dpkg/opencode-glibc_$(VER)_aarch64.deb "$(OUTPUT_ROOT)/"; \
+			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/dpkg/opencode-wrapper_$(VER)_aarch64.deb "$(OUTPUT_ROOT)/"; \
 		else \
-			mkdir -p "$(OUTPUT_ROOT)/deb" && cp -f packing/dpkg/opencode-glibc_$(VER)_aarch64.deb "$(OUTPUT_ROOT)/deb/"; \
+			mkdir -p "$(OUTPUT_ROOT)/deb" && cp -f packing/dpkg/opencode-wrapper_$(VER)_aarch64.deb "$(OUTPUT_ROOT)/deb/"; \
 		fi; \
 	fi
 
@@ -142,15 +142,15 @@ pacman:
 	PACKAGER_NAME='$(PACKAGER_NAME)' ./scripts/package/package_pacman.sh
 	@if [ "$(OUTPUT_ROOT)" != "$(CURDIR)/packing" ]; then \
 		if [ "$(MIX)" = "1" ]; then \
-			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/pacman/opencode-glibc-$(VER)-*.pkg.* "$(OUTPUT_ROOT)/"; \
+			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/pacman/opencode-wrapper-$(VER)-*.pkg.* "$(OUTPUT_ROOT)/"; \
 		else \
-			mkdir -p "$(OUTPUT_ROOT)/pacman" && cp -f packing/pacman/opencode-glibc-$(VER)-*.pkg.* "$(OUTPUT_ROOT)/pacman/"; \
+			mkdir -p "$(OUTPUT_ROOT)/pacman" && cp -f packing/pacman/opencode-wrapper-$(VER)-*.pkg.* "$(OUTPUT_ROOT)/pacman/"; \
 		fi; \
 	fi
 
 # Native provider packaging (transplant revival line, stable mainline since 27/28).
 # Provides the same `opencode` command as the glibc wrapper packages; the two
-# providers conflict (installing one replaces the other). The glibc wrapper line is now the appendix (renamed opencode-glibc); native is the stable mainline.
+# providers conflict (installing one replaces the other). The glibc wrapper line is now the appendix (renamed opencode-wrapper); native is the stable mainline.
 deb-native:
 	@if [ -z "$(VER_IS_SET)" ]; then \
 		echo "Error: VER is required. Example: make deb-native VER=1.18.21"; \
@@ -632,15 +632,15 @@ release-upload:
 	if ! gh release view "$(TAG)" --repo "$(REPO)" >/dev/null 2>&1; then \
 		echo "Creating release $(TAG)..."; \
 		if [ "$(NATIVE)" = "STABLE" ]; then \
-			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "OpenCode for Termux. Mainline (stable since 27/28): native bionic line - opencode-<ver>-aarch64-android-native / opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* - zero-glibc, full TUI, Android API>=28. Appendix (legacy): glibc wrapper packages opencode-glibc_<ver>_aarch64.deb / opencode-glibc-<ver>-aarch64.pkg.tar.*." 2>&1 || exit 1; \
+			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "OpenCode for Termux. Mainline (stable since 27/28): native bionic line - opencode-<ver>-aarch64-android-native / opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* - zero-glibc, full TUI, Android API>=28. Appendix (legacy): glibc wrapper packages opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.*." 2>&1 || exit 1; \
 		else \
-			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "Dual-track OpenCode for Termux. Track 1 (glibc appendix, renamed opencode-glibc): glibc wrapper packages opencode-glibc_<ver>_aarch64.deb / opencode-glibc-<ver>-aarch64.pkg.tar.* - full TUI. Track 2 (native, stable mainline since 27/28): opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* / *-android-native assets - zero-glibc, full TUI (bionic libopentui.so, W10a 5/5), Android API>=28." 2>&1 || exit 1; \
+			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "Dual-track OpenCode for Termux. Track 1 (glibc appendix, renamed opencode-wrapper): glibc wrapper packages opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.* - full TUI. Track 2 (native, stable mainline since 27/28): opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* / *-android-native assets - zero-glibc, full TUI (bionic libopentui.so, W10a 5/5), Android API>=28." 2>&1 || exit 1; \
 		fi; \
 	else \
 		echo "Release $(TAG) exists; rebinding tag to HEAD via gh api (HTTPS, SSH 22 blocked)..."; \
 		gh api -X PATCH "repos/$(REPO)/git/refs/tags/$(TAG)" -f sha="$$(git rev-parse HEAD)" >/dev/null 2>&1 || echo "  (tag rebind skipped: API refused or already current)"; \
 	fi; \
-	for f in $(RELEASE_DIR)/opencode-glibc_*.deb $(RELEASE_DIR)/opencode-glibc-*.pkg.*; do \
+	for f in $(RELEASE_DIR)/opencode-wrapper_*.deb $(RELEASE_DIR)/opencode-wrapper-*.pkg.*; do \
 		if [ -f "$$f" ]; then \
 			echo "  uploading $$(basename $$f)..."; \
 			if ! gh release upload "$(TAG)" "$$f" --repo "$(REPO)" --clobber 2>&1; then upload_failed=1; fi; \
@@ -648,7 +648,7 @@ release-upload:
 	done; \
 	mkdir -p "$(RELEASE_DIR)"; \
 	echo "--- Dual-track asset naming ---"; \
-	echo "    glibc wrapper line (appendix, renamed opencode-glibc): opencode-glibc_<ver>_aarch64.deb / opencode-glibc-<ver>-aarch64.pkg.tar.*"; \
+	echo "    glibc wrapper line (appendix, renamed opencode-wrapper): opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.*"; \
 	echo "    native line (stable mainline since 27/28): opencode-<ver>-aarch64-android-native / opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* / opencode-<ver>-report.json / opencode-<ver>-watcher.tar.gz"; \
 	if [ "$(NATIVE)" = "1" ] || [ "$(NATIVE)" = "STABLE" ]; then \
 		cp "$(NATIVE_DIR)/opencode-native-revived" "$(RELEASE_DIR)/opencode-$(NATIVE_VER)-aarch64-android-native"; \

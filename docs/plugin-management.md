@@ -4,7 +4,7 @@ For Termux, user-friendly plugin management should be based on **local-plugin fi
 
 ## Recommended install path (updated 2026-09)
 
-- **Preferred**: install plugins with the `opencode plugin` command, then let the agent configure them per this document. Verified working on both runtime lines (`opencode` native mainline and `opencode-glibc`).
+- **Preferred**: install plugins with the `opencode plugin` command, then let the agent configure them per this document. Verified working on both runtime lines (`opencode` native mainline and `opencode-wrapper`).
 - **Still supported**: local `file:///.../index.js` registration (the flows below). Keep using it when you need snapshot/rollback control or offline installs.
 - Legacy note: machines upgraded from the 1.2.x era may still carry bare-name `plugin:` entries in `opencode.json` (e.g. `"plugin": ["oh-my-openagent", ...]`). That is a legacy trace, not the recommended pattern on Termux.
 

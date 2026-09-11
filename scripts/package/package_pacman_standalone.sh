@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# scripts/package/package_pacman_standalone.sh — build the opencode-glibc-standalone pacman package
+# scripts/package/package_pacman_standalone.sh — build the opencode-wrapper-standalone pacman package
 # Pure-addition standalone package: frozen single version for rollback only.
-# Coexists with `opencode` (native) and `opencode-glibc` (no Conflicts on the
+# Coexists with `opencode` (native) and `opencode-wrapper` (no Conflicts on the
 # literal name `opencode`). Uses PKGBUILD.standalone.
 set -euo pipefail
 
@@ -11,18 +11,18 @@ PACKAGER_NAME="${PACKAGER_NAME:-Hope2333(幽零小喵) <u0catmiao@proton.me>}"
 PKGREL="${PKGREL:-1}"
 
 # Standalone staged prefix must use the independent lib prefix.
-[[ -x "$STAGED_PREFIX/lib/opencode-glibc/runtime/opencode" ]] || {
+[[ -x "$STAGED_PREFIX/lib/opencode-wrapper/runtime/opencode" ]] || {
 	echo "Error: missing OpenCode standalone runtime" >&2
 	exit 1
 }
-[[ -x "$STAGED_PREFIX/bin/opencode-glibc" ]] || {
+[[ -x "$STAGED_PREFIX/bin/opencode-wrapper" ]] || {
 	echo "Error: missing standalone staged launcher" >&2
 	exit 1
 }
 
 # Version: use explicit VERSION if set, else read from runtime
 if [[ -z "${VERSION:-}" ]]; then
-	if ! VERSION="$("$STAGED_PREFIX/lib/opencode-glibc/runtime/opencode" --version)"; then
+	if ! VERSION="$("$STAGED_PREFIX/lib/opencode-wrapper/runtime/opencode" --version)"; then
 		echo "Error: staged runtime version check failed" >&2
 		exit 1
 	fi

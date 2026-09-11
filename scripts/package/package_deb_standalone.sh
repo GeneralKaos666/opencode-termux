@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# scripts/package/package_deb_standalone.sh — build the opencode-glibc-standalone DEB
+# scripts/package/package_deb_standalone.sh — build the opencode-wrapper-standalone DEB
 # Pure-addition standalone package: frozen single version for rollback only.
-# Coexists with `opencode` (native) and `opencode-glibc` (no Conflicts on the
+# Coexists with `opencode` (native) and `opencode-wrapper` (no Conflicts on the
 # literal name `opencode`). Uses an independent work dir and control template.
 set -euo pipefail
 
@@ -23,18 +23,18 @@ if [[ -z "${ARCH_DEB:-}" ]]; then
 	ARCH_DEB="$(dpkg --print-architecture)"
 fi
 # Standalone staged prefix must use the independent lib prefix.
-[[ -x "$STAGED_PREFIX/lib/opencode-glibc/runtime/opencode" ]] || {
+[[ -x "$STAGED_PREFIX/lib/opencode-wrapper/runtime/opencode" ]] || {
 	echo "Error: missing standalone staged runtime" >&2
 	exit 1
 }
-[[ -x "$STAGED_PREFIX/bin/opencode-glibc" ]] || {
+[[ -x "$STAGED_PREFIX/bin/opencode-wrapper" ]] || {
 	echo "Error: missing standalone staged launcher" >&2
 	exit 1
 }
 
 # Version: use explicit VERSION if set, else read from the staged runtime.
 if [[ -z "${VERSION:-}" ]]; then
-	if ! VERSION="$("$STAGED_PREFIX/lib/opencode-glibc/runtime/opencode" --version)"; then
+	if ! VERSION="$("$STAGED_PREFIX/lib/opencode-wrapper/runtime/opencode" --version)"; then
 		echo "Error: staged runtime version check failed" >&2
 		exit 1
 	fi
@@ -46,7 +46,7 @@ fi
 
 DEB_ROOT="$ROOT_DIR/packing/dpkg-standalone/work"
 OUT_DIR="$ROOT_DIR/packing/dpkg-standalone"
-OUT_FILE="$OUT_DIR/opencode-glibc-standalone_${VERSION}_${ARCH_DEB}.deb"
+OUT_FILE="$OUT_DIR/opencode-wrapper-standalone_${VERSION}_${ARCH_DEB}.deb"
 
 rm -rf "$DEB_ROOT"
 mkdir -p "$DEB_ROOT/DEBIAN" "$DEB_ROOT$PREFIX" "$OUT_DIR"
@@ -55,8 +55,8 @@ cp -a "$STAGED_PREFIX/." "$DEB_ROOT$PREFIX/"
 
 # Ensure the standalone launcher is present (source of truth at repo bin/).
 mkdir -p "$DEB_ROOT$PREFIX/bin"
-cp "$ROOT_DIR/bin/opencode-glibc" "$DEB_ROOT$PREFIX/bin/opencode-glibc"
-chmod 755 "$DEB_ROOT$PREFIX/bin/opencode-glibc"
+cp "$ROOT_DIR/bin/opencode-wrapper" "$DEB_ROOT$PREFIX/bin/opencode-wrapper"
+chmod 755 "$DEB_ROOT$PREFIX/bin/opencode-wrapper"
 
 # Render control from template, substituting version/architecture.
 sed -e "s/\${OPENCODE_VERSION}/$VERSION/g" \

@@ -1,5 +1,5 @@
 # PKGBUILD for OpenCode on Termux
-pkgname=opencode-glibc
+pkgname=opencode-wrapper
 pkgver=1.1.65
 pkgrel=8
 pkgdesc='Open source coding agent for Termux with TTY+lock cleanup'

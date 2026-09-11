@@ -1,4 +1,4 @@
-Package: opencode-glibc
+Package: opencode-wrapper
 Version: ${OPENCODE_VERSION}
 Architecture: ${ARCHITECTURE}
 Maintainer: Hope2333(幽零小喵) <u0catmiao@proton.me>

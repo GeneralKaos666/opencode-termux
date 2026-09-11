@@ -187,9 +187,9 @@ android Bun 解释器 `--version` 仅 0.010–0.048s，说明 60–90× 的机�
 ## 5. 选型建议
 
 **包别名约定**：终端用户命令保持 `opencode` 不变，由 `opencode-native`（native 复活线产物）
-或 `opencode-glibc`（wrapper 主线产物）两个具体包提供，互斥安装。
+或 `opencode-wrapper`（wrapper 主线产物）两个具体包提供，互斥安装。
 
-**当前默认推荐：`opencode-glibc` 成熟路线**（已拍板，写入本文档作为决议）：
+**当前默认推荐：`opencode-wrapper` 成熟路线**（已拍板，写入本文档作为决议）：
 
 1. **功能完整性**：唯一同时具备完整 TUI + watcher + FFI 的路线；native 复活线 TUI 双层硬阻断
    （bun:ffi 禁用 × @opentui 无 bionic 变体）短期无解 [.omo/evidence/task-27-tinyc-ffi.log 最终结论]；

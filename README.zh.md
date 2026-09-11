@@ -48,7 +48,7 @@ OpenCode on Termux。**主线 = native bionic 直跑线**：经 transplant 复�
 
 ### 安装（主线包名：`opencode`）
 
-native 主线已继承 `opencode` 原名（glibc wrapper 线更名为 `opencode-glibc`，
+native 主线已继承 `opencode` 原名（glibc wrapper 线更名为 `opencode-wrapper`，
 见[共存矩阵](#包共存矩阵)）：
 
 ```bash
@@ -106,10 +106,10 @@ pacman -U opencode-compressed-<version>-1-aarch64.pkg.tar.xz
 
 | 包名 | 线 | 命令入口 | 共存关系 |
 |---|---|---|---|
-| `opencode` | native bionic（主线） | `opencode` | 与 `opencode-glibc`、`opencode-compressed` 互斥 |
-| `opencode-compressed` | native bionic + UPX | `opencode` | 与 `opencode`、`opencode-glibc` 互斥 |
-| `opencode-glibc` | glibc wrapper（附录） | `opencode` | 与 `opencode`、`opencode-compressed` 互斥 |
-| `opencode-glibc-standalone` | glibc wrapper，单版本冻结 | `opencode-glibc` | **可与 `opencode` 共存**；仅作回退 |
+| `opencode` | native bionic（主线） | `opencode` | 与 `opencode-wrapper`、`opencode-compressed` 互斥 |
+| `opencode-compressed` | native bionic + UPX | `opencode` | 与 `opencode`、`opencode-wrapper` 互斥 |
+| `opencode-wrapper` | glibc wrapper（附录） | `opencode` | 与 `opencode`、`opencode-compressed` 互斥 |
+| `opencode-wrapper-standalone` | glibc wrapper，单版本冻结 | `opencode-wrapper` | **可与 `opencode` 共存**；仅作回退 |
 
 三个以 `opencode` 为入口的包通过包管理器冲突机制相互替换；standalone 包使用独立
 库路径与独立命令名，因此可作为冻结回退与 native 主线并存。
@@ -204,7 +204,7 @@ make matrix VERS='1.18.[15-27]' TARGET_HOST=<host> TARGET_USER=<user>
 
 **Pacman**（per-repo db）：`https://hope2333.github.io/repo/Termux/pacman/<repo>.db.tar.gz`
 —— `opencode-termux` db 包含全部三个家族（`opencode` / `opencode-compressed` /
-`opencode-glibc`，均为 1.18.27-1）。
+`opencode-wrapper`，均为 1.18.27-1）。
 
 **Apt flat index**：`https://github.com/Hope2333/opencode-termux/releases/latest/download/Packages.gz`
 （40 条目：13 native + 13 compressed + 13 glibc + 1 standalone）。
@@ -246,7 +246,7 @@ Bun 单文件应用（Bun runtime + JS 编译进单个 ELF）。loader 在其前
 （userland exec，不走 execve），使 `/proc/self/exe` 保持指向自身、
 Bun 的 JS 定位不被破坏。
 
-`opencode-glibc` 包**自包含**：无需安装 Termux 的 `glibc` 或
+`opencode-wrapper` 包**自包含**：无需安装 Termux 的 `glibc` 或
 `ca-certificates-glibc` 包即可在裸 Termux 上运行。打包为 bin-only（单一二进制
 位于 `usr/bin/opencode`），无 postinst/prerm/postrm 钩子，无 full-prefix 拷贝。
 TUI 经 bionic libopentui.so swap 正常工作（docs/tui-common-fix.md）。
@@ -262,18 +262,18 @@ TUI 经 bionic libopentui.so swap 正常工作（docs/tui-common-fix.md）。
 
 ```bash
 # Path A: apt/pkg
-dpkg -i opencode-glibc_<version>_aarch64.deb
+dpkg -i opencode-wrapper_<version>_aarch64.deb
 
 # Path B: pacman
-pacman -U opencode-glibc-<version>-1-aarch64.pkg.tar.xz
+pacman -U opencode-wrapper-<version>-1-aarch64.pkg.tar.xz
 ```
 
-回退包（与 native `opencode` 共存，命令入口 `opencode-glibc`，单版本冻结）：
+回退包（与 native `opencode` 共存，命令入口 `opencode-wrapper`，单版本冻结）：
 
 ```bash
-dpkg -i opencode-glibc-standalone_<version>_aarch64.deb
+dpkg -i opencode-wrapper-standalone_<version>_aarch64.deb
 # 或
-pacman -U opencode-glibc-standalone-<version>-1-aarch64.pkg.tar.xz
+pacman -U opencode-wrapper-standalone-<version>-1-aarch64.pkg.tar.xz
 ```
 
 ### 构建
@@ -322,14 +322,14 @@ scripts/
   fetch-fixtures.sh           transplant-check golden fixtures 预下载
   build.sh                    Stage prefix（glibc 线；STANDALONE=1 出回退包）
   launcher.sh                 Runtime dispatcher（cleanup + exec）
-  package/package_deb.sh      DEB builder（opencode-glibc）
-  package/package_pacman.sh   Pacman builder（opencode-glibc）
+  package/package_deb.sh      DEB builder（opencode-wrapper）
+  package/package_pacman.sh   Pacman builder（opencode-wrapper）
   package/package_deb_native.sh        DEB builder（native opencode）
   package/package_pacman_native.sh     Pacman builder（native opencode）
   package/package_deb_compressed.sh    DEB builder（opencode-compressed）
   package/package_pacman_compressed.sh Pacman builder（opencode-compressed）
-  package/package_deb_standalone.sh    DEB builder（opencode-glibc-standalone）
-  package/package_pacman_standalone.sh Pacman builder（opencode-glibc-standalone）
+  package/package_deb_standalone.sh    DEB builder（opencode-wrapper-standalone）
+  package/package_pacman_standalone.sh Pacman builder（opencode-wrapper-standalone）
   hooks/run-system-skills.sh  Post-install/upgrade hooks
 patches/
   0001-android-support.patch  Upstream OpenCode Android patches (WIP)

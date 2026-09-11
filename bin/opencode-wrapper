@@ -1,12 +1,12 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# bin/opencode-glibc — OpenCode glibc standalone launcher for Termux
+# bin/opencode-wrapper — OpenCode glibc standalone launcher for Termux
 # Frozen single-version rollback package. Independent state/lock dir to avoid
 # clashing with the glibc mainline (opencode) or native (opencode) packages.
-# Command entry: opencode-glibc. Runtime: usr/lib/opencode-glibc/runtime/opencode.
+# Command entry: opencode-wrapper. Runtime: usr/lib/opencode-wrapper/runtime/opencode.
 set -euo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OPENCODE_RUNTIME="$SELF_DIR/../lib/opencode-glibc/runtime/opencode"
+OPENCODE_RUNTIME="$SELF_DIR/../lib/opencode-wrapper/runtime/opencode"
 
 cleanup_tty_full() {
 	if [ -t 1 ]; then
@@ -24,8 +24,8 @@ cleanup_tty_soft() {
 }
 
 cleanup_state_locks() {
-	# Independent state dir: opencode-glibc-standalone (NOT opencode / opencode-glibc)
-	local state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/opencode-glibc-standalone"
+	# Independent state dir: opencode-wrapper-standalone (NOT opencode / opencode-wrapper)
+	local state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/opencode-wrapper-standalone"
 	if [ -d "$state_dir" ]; then
 		find "$state_dir" -maxdepth 1 -type f -name '*.lock' -delete 2>/dev/null || true
 	fi
@@ -37,7 +37,7 @@ cleanup_state_locks
 export OPENCODE_DISABLE_DEFAULT_PLUGINS
 
 if [[ ! -x "$OPENCODE_RUNTIME" ]]; then
-	echo "opencode-glibc: runtime not found" >&2
+	echo "opencode-wrapper: runtime not found" >&2
 	exit 1
 fi
 

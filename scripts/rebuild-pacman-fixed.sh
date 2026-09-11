@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Rebuild 26 pacman packages from existing deb payloads with fixed PKGBUILDs.
 # Native: packing/dpkg-native/opencode_<V>_aarch64.deb → extract bin/opencode + crhandler
-# Glibc: packing/dpkg/opencode-glibc_<V>_aarch64.deb → extract staged prefix tree
+# Glibc: packing/dpkg/opencode-wrapper_<V>_aarch64.deb → extract staged prefix tree
 # KEY FIX: $pkgdir/usr/ (relative) not $pkgdir$prefix (absolute) → no double prefix.
 #
 # NOTE: Termux makepkg creates empty data/data/com.termux/files/ directory stubs
@@ -90,7 +90,7 @@ log "=== PHASE: GLIBC REBUILD ($(date)) ==="
 GLIBC_TEMPLATE="$ROOT_DIR/packing/pacman/PKGBUILD"
 
 for V in "${VERSIONS[@]}"; do
-    DEB="$ROOT_DIR/packing/dpkg/opencode-glibc_${V}_aarch64.deb"
+    DEB="$ROOT_DIR/packing/dpkg/opencode-wrapper_${V}_aarch64.deb"
     STAGE="$WORKDIR/g-$V"
     [[ ! -f "$DEB" ]] && { log "G${V}-SKIP deb not found"; continue; }
     log -n "G${V} extract... "
@@ -104,7 +104,7 @@ for V in "${VERSIONS[@]}"; do
     BLD="$WORKDIR/bld-g-$V"
     if run_makepkg "$BLD" "$GLIBC_TEMPLATE" "$V" \
        "STAGED_PREFIX=$STAGED_PREFIX" "REPO_ROOT=$ROOT_DIR" >/dev/null 2>&1; then
-        OUTPKG=$(ls "$BLD/opencode-glibc-${V}-${PKGREL}-aarch64.pkg.tar.xz" 2>/dev/null || true)
+        OUTPKG=$(ls "$BLD/opencode-wrapper-${V}-${PKGREL}-aarch64.pkg.tar.xz" 2>/dev/null || true)
         RESULT=$(verify_pkg "$OUTPKG" "opencode" 2>/dev/null || true)
         if [[ "$RESULT" == "OK" ]]; then
             mv "$OUTPKG" "$ROOT_DIR/packing/pacman/"

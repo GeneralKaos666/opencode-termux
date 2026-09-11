@@ -119,8 +119,8 @@ for VER in "${VERSIONS[@]}"; do
         echo "  G$VER: building glibc..."
         if make all VER="$VER" PKG=both >> "$EVIDENCE" 2>&1; then
             echo "G$VER OK" >> "$EVIDENCE"
-            for f in "$REPO/packing/dpkg/opencode-glibc_${VER}_aarch64.deb" \
-                     "$REPO/packing/pacman/opencode-glibc-${VER}-"*.pkg.*; do
+            for f in "$REPO/packing/dpkg/opencode-wrapper_${VER}_aarch64.deb" \
+                     "$REPO/packing/pacman/opencode-wrapper-${VER}-"*.pkg.*; do
                 [ -f "$f" ] && sha256sum "$f" >> "$SUMS_FILE"
             done
             RESULTS="${RESULTS}G${VER}:OK "; PASS=$((PASS+1))

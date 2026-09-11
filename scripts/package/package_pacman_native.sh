@@ -4,7 +4,7 @@ set -euo pipefail
 # Build the opencode-native pacman provider (transplant revival line).
 #
 # Provides the `opencode` command from artifacts/transplant/<ver>/opencode-native-revived.
-# Stable mainline provider; conflicts with the glibc appendix package (`opencode-glibc`);
+# Stable mainline provider; conflicts with the glibc appendix package (`opencode-wrapper`);
 # conflicts with it (installing one replaces the other).
 # Native constraints: zero glibc deps, Android API >= 28, full TUI (stable mainline since 27/28).
 

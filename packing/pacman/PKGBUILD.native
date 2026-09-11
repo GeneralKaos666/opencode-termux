@@ -3,14 +3,14 @@
 pkgname=opencode
 pkgver=0.0.0
 pkgrel=1
-pkgdesc='OpenCode native Android runtime for Termux (stable mainline since 27/28, full TUI; glibc appendix is opencode-glibc)'
+pkgdesc='OpenCode native Android runtime for Termux (stable mainline since 27/28, full TUI; glibc appendix is opencode-wrapper)'
 arch=('aarch64')
 url='https://github.com/anomalyco/opencode'
 license=('MIT')
 options=('!strip' '!debug' '!emptydirs')
 
 depends=()
-# NOTE: no conflict on the literal 'opencode-glibc' name: opencode-glibc-standalone
+# NOTE: no conflict on the literal 'opencode-wrapper' name: opencode-wrapper-standalone
 # provides that virtual name and MUST coexist with us. Mutual exclusion with the
 # real glibc package is enforced by its own conflicts=('opencode' ...) list.
 conflicts=('opencode-compressed')
@@ -59,7 +59,7 @@ post_install() {
     echo "Usage: opencode --version"
     echo "Scope: full TUI and run/serve. Stable mainline since 27/28."
     echo "Requires Android API >= 28; zero glibc runtime deps."
-    echo "Glibc appendix alternative: package 'opencode-glibc'."
+    echo "Glibc appendix alternative: package 'opencode-wrapper'."
 }
 
 post_upgrade() {

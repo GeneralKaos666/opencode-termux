@@ -1,7 +1,7 @@
 # PKGBUILD for OpenCode Compressed (UPX-packed native variant) on Termux
 # Built via scripts/package/package_pacman_compressed.sh (pkgver/pkgrel rewritten there).
 # D1 ruling: mutually exclusive with opencode (native mainline) and
-# opencode-glibc (glibc appendix). Provides the versioned virtual name
+# opencode-wrapper (glibc appendix). Provides the versioned virtual name
 # opencode=<pkgver>. No replaces=(): the compressed variant is an
 # alternative, not an upgrade - it must never silently displace an
 # installed provider or wipe its user data.
@@ -16,7 +16,7 @@ options=('!strip' '!debug' '!emptydirs')
 
 depends=()
 provides=("opencode=$pkgver")
-conflicts=('opencode' 'opencode-glibc')
+conflicts=('opencode' 'opencode-wrapper')
 replaces=()
 
 source=()
@@ -47,7 +47,7 @@ post_install() {
     echo "OpenCode compressed variant installed (UPX-packed native bionic runtime)"
     echo "Usage: opencode --version"
     echo "Scope: same runtime as the native mainline, UPX-packed for size."
-    echo "Mutually exclusive with opencode and opencode-glibc (no Replaces: variant, not upgrade)."
+    echo "Mutually exclusive with opencode and opencode-wrapper (no Replaces: variant, not upgrade)."
 }
 
 post_upgrade() {

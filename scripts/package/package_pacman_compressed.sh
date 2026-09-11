@@ -4,7 +4,7 @@ set -euo pipefail
 # Build the opencode-compressed pacman provider (UPX-packed native variant).
 #
 # D1 ruling: three mutually exclusive providers — opencode (native mainline),
-# opencode-glibc (glibc appendix), opencode-compressed. This package provides
+# opencode-wrapper (glibc appendix), opencode-compressed. This package provides
 # the versioned virtual name opencode=<ver> and conflicts with BOTH other
 # families; no replaces=() (variant, not upgrade).
 #
@@ -46,6 +46,11 @@ COMPRESSED_BIN="${OPENCODE_COMPRESSED_BIN:-$TRANSPLANT_ROOT/$VERSION/opencode-na
 # package() resolves OPENCODE_COMPRESSED_BIN from the makepkg cwd, so a
 # relative path would fail there (T5 real-build finding).
 COMPRESSED_BIN="$(readlink -f "$COMPRESSED_BIN")"
+
+# Same T5-class fix for the crhandler shim: package() resolves it from the
+# makepkg cwd, so a relative path would fail there.
+OPENCODE_CRHANDLER_SO="$(readlink -f "${OPENCODE_CRHANDLER_SO:?OPENCODE_CRHANDLER_SO must point to libopencode-crhandler.so}")"
+
 
 cd "$ROOT_DIR/packing/pacman"
 rm -rf "$ROOT_DIR/packing/pacman/pkg" "$ROOT_DIR/packing/pacman/src"

@@ -6,7 +6,7 @@ set -euo pipefail
 # This package IS the plain `opencode` name (inherited by the native mainline
 # per the 27/28 package-rename decision). Built from
 # artifacts/transplant/<ver>/opencode-native-revived; conflicts with the glibc
-# appendix package (opencode-glibc) and the compressed transitional package
+# appendix package (opencode-wrapper) and the compressed transitional package
 # (opencode-compressed): installing one replaces the other.
 #
 # Native line constraints (documented in the package description):
@@ -87,7 +87,7 @@ Maintainer: $MAINTAINER
 Section: utils
 Priority: optional
 Depends:
-Conflicts: opencode-glibc, opencode-compressed
+Conflicts: opencode-wrapper, opencode-compressed
 Description: OpenCode native bionic mainline (stable since 27/28). Full TUI via bionic libopentui.so (W10a deep smoke 5/5). Zero glibc dependencies.
 EOF
 
@@ -101,7 +101,7 @@ echo "OpenCode Native for Termux installed (stable mainline since 27/28)"
 echo "Run: opencode --version"
 echo "Scope: full TUI via bionic libopentui.so (W10a deep smoke 5/5). Zero glibc runtime deps."
 echo "Requires Android API >= 28; zero glibc runtime deps."
-echo "The glibc wrapper line is now the appendix (renamed opencode-glibc); native is the stable mainline."
+echo "The glibc wrapper line is now the appendix (renamed opencode-wrapper); native is the stable mainline."
 exit 0
 POSTINST
 chmod 755 "$DEB_ROOT/DEBIAN/postinst"

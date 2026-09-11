@@ -54,7 +54,7 @@ official android bun ELF          opencode module graph
 ### Install (mainline package: `opencode`)
 
 The native mainline has inherited the plain `opencode` package name (the glibc wrapper
-line was renamed `opencode-glibc` — see the [coexistence matrix](#package-coexistence-matrix)):
+line was renamed `opencode-wrapper` — see the [coexistence matrix](#package-coexistence-matrix)):
 
 ```bash
 # Download from https://github.com/Hope2333/opencode-termux/releases
@@ -113,10 +113,10 @@ pacman -U opencode-compressed-<version>-1-aarch64.pkg.tar.xz
 
 | Package | Line | Command entry | Coexistence |
 |---|---|---|---|
-| `opencode` | native bionic (mainline) | `opencode` | mutually exclusive with `opencode-glibc` and `opencode-compressed` |
-| `opencode-compressed` | native bionic + UPX | `opencode` | mutually exclusive with `opencode` and `opencode-glibc` |
-| `opencode-glibc` | glibc wrapper (appendix) | `opencode` | mutually exclusive with `opencode` and `opencode-compressed` |
-| `opencode-glibc-standalone` | glibc wrapper, frozen single version | `opencode-glibc` | **coexists with `opencode`**; rollback only |
+| `opencode` | native bionic (mainline) | `opencode` | mutually exclusive with `opencode-wrapper` and `opencode-compressed` |
+| `opencode-compressed` | native bionic + UPX | `opencode` | mutually exclusive with `opencode` and `opencode-wrapper` |
+| `opencode-wrapper` | glibc wrapper (appendix) | `opencode` | mutually exclusive with `opencode` and `opencode-compressed` |
+| `opencode-wrapper-standalone` | glibc wrapper, frozen single version | `opencode-wrapper` | **coexists with `opencode`**; rollback only |
 
 The three `opencode`-entry packages replace each other via the package manager's
 conflict mechanism; the standalone package uses an independent lib path and a distinct
@@ -218,7 +218,7 @@ Packages are distributed through two channels:
 
 **Pacman** (per-repo db): `https://hope2333.github.io/repo/Termux/pacman/<repo>.db.tar.gz`
 — the `opencode-termux` db carries all three families (`opencode` / `opencode-compressed`
-/ `opencode-glibc`, all at 1.18.27-1).
+/ `opencode-wrapper`, all at 1.18.27-1).
 
 **Apt flat index**: `https://github.com/Hope2333/opencode-termux/releases/latest/download/Packages.gz`
 (40 entries: 13 native + 13 compressed + 13 glibc + 1 standalone).
@@ -262,7 +262,7 @@ metadata, extracts the embedded opencode binary, then mmaps glibc's ld.so and ju
 its entry (userland exec, no execve), keeping `/proc/self/exe` pointing at itself so
 Bun's JS location stays intact.
 
-The `opencode-glibc` package is **self-contained**: it runs on bare Termux without
+The `opencode-wrapper` package is **self-contained**: it runs on bare Termux without
 the Termux `glibc` or `ca-certificates-glibc` packages. Packaging is bin-only (single
 binary at `usr/bin/opencode`), with no postinst/prerm/postrm hooks and no full-prefix
 copy. Working TUI via bionic libopentui.so swap (docs/tui-common-fix.md).
@@ -278,19 +278,19 @@ copy. Working TUI via bionic libopentui.so swap (docs/tui-common-fix.md).
 
 ```bash
 # Path A: apt/pkg
-dpkg -i opencode-glibc_<version>_aarch64.deb
+dpkg -i opencode-wrapper_<version>_aarch64.deb
 
 # Path B: pacman
-pacman -U opencode-glibc-<version>-1-aarch64.pkg.tar.xz
+pacman -U opencode-wrapper-<version>-1-aarch64.pkg.tar.xz
 ```
 
-Rollback package (coexists with the native `opencode`, command entry `opencode-glibc`,
+Rollback package (coexists with the native `opencode`, command entry `opencode-wrapper`,
 single frozen version):
 
 ```bash
-dpkg -i opencode-glibc-standalone_<version>_aarch64.deb
+dpkg -i opencode-wrapper-standalone_<version>_aarch64.deb
 # or
-pacman -U opencode-glibc-standalone-<version>-1-aarch64.pkg.tar.xz
+pacman -U opencode-wrapper-standalone-<version>-1-aarch64.pkg.tar.xz
 ```
 
 ### Build
@@ -340,14 +340,14 @@ scripts/
   fetch-fixtures.sh           transplant-check golden fixtures pre-download
   build.sh                    Stage prefix (glibc line; STANDALONE=1 for rollback pkg)
   launcher.sh                 Runtime dispatcher (cleanup + exec)
-  package/package_deb.sh      DEB builder (opencode-glibc)
-  package/package_pacman.sh   Pacman builder (opencode-glibc)
+  package/package_deb.sh      DEB builder (opencode-wrapper)
+  package/package_pacman.sh   Pacman builder (opencode-wrapper)
   package/package_deb_native.sh        DEB builder (native opencode)
   package/package_pacman_native.sh     Pacman builder (native opencode)
   package/package_deb_compressed.sh    DEB builder (opencode-compressed)
   package/package_pacman_compressed.sh Pacman builder (opencode-compressed)
-  package/package_deb_standalone.sh    DEB builder (opencode-glibc-standalone)
-  package/package_pacman_standalone.sh Pacman builder (opencode-glibc-standalone)
+  package/package_deb_standalone.sh    DEB builder (opencode-wrapper-standalone)
+  package/package_pacman_standalone.sh Pacman builder (opencode-wrapper-standalone)
   hooks/run-system-skills.sh  Post-install/upgrade hooks
 patches/
   0001-android-support.patch  Upstream OpenCode Android patches (WIP)

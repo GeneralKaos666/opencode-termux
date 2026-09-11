@@ -9,8 +9,8 @@ echo "Regenerating SHA256SUMS-prebatch.txt..."
 > "$SUMS_FILE"
 
 # Glibc packages
-for f in "$REPO/packing/dpkg/opencode-glibc_"*.deb \
-         "$REPO/packing/pacman/opencode-glibc-"*.pkg.*; do
+for f in "$REPO/packing/dpkg/opencode-wrapper_"*.deb \
+         "$REPO/packing/pacman/opencode-wrapper-"*.pkg.*; do
     [ -f "$f" ] && sha256sum "$f" >> "$SUMS_FILE"
 done
 
@@ -21,8 +21,8 @@ for f in "$REPO/packing/dpkg-native/opencode_"*.deb \
 done
 
 # Standalone packages (if present)
-for f in "$REPO/packing/dpkg-standalone/opencode-glibc-standalone_"*.deb \
-         "$REPO/packing/pacman/opencode-glibc-standalone-"*.pkg.*; do
+for f in "$REPO/packing/dpkg-standalone/opencode-wrapper-standalone_"*.deb \
+         "$REPO/packing/pacman/opencode-wrapper-standalone-"*.pkg.*; do
     [ -f "$f" ] && sha256sum "$f" >> "$SUMS_FILE"
 done
 

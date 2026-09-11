@@ -75,29 +75,29 @@
 
 ### L5 — 打包互斥矩阵（发现缺口并修复）
 
-教义（D1 裁决）：`opencode`(native) ↔ `opencode-glibc` 互斥；
-↔ `opencode-glibc-standalone` 共存；glibc ↔ standalone 互斥；
+教义（D1 裁决）：`opencode`(native) ↔ `opencode-wrapper` 互斥；
+↔ `opencode-wrapper-standalone` 共存；glibc ↔ standalone 互斥；
 `opencode-compressed` 与前三者互斥。
 
 逐家族 control/PKGINFO 全枚举结果：
 
 | 家族 | deb Conflicts | pacman conflicts | 备注 |
 |------|---------------|------------------|------|
-| opencode (native) | opencode-glibc, opencode-compressed | opencode-compressed | pacman 侧**故意**不声明 glibc 字面名，见下 |
-| opencode-glibc | opencode (+ Replaces: opencode) | opencode (+ replaces) ×13 一致 | 反向闭环承担 native↔glibc 互斥 |
-| opencode-glibc-standalone | opencode-glibc | opencode-glibc (+ provides=opencode-glibc) | 与 native 共存 ✓ |
-| opencode-compressed | opencode, opencode-glibc | opencode, opencode-glibc | **deb 侧漏 standalone（G2）** |
+| opencode (native) | opencode-wrapper, opencode-compressed | opencode-compressed | pacman 侧**故意**不声明 glibc 字面名，见下 |
+| opencode-wrapper | opencode (+ Replaces: opencode) | opencode (+ replaces) ×13 一致 | 反向闭环承担 native↔glibc 互斥 |
+| opencode-wrapper-standalone | opencode-wrapper | opencode-wrapper (+ provides=opencode-wrapper) | 与 native 共存 ✓ |
+| opencode-compressed | opencode, opencode-wrapper | opencode, opencode-wrapper | **deb 侧漏 standalone（G2）** |
 
-- **G1（native pacman 缺 `opencode-glibc`）→ 无需修**：pacman 的 conflicts 会匹配
-  Provides 虚拟名，若 native 显式声明 `opencode-glibc` 会误伤 standalone（其
-  `provides=opencode-glibc`）。现设计由 glibc 侧 `conflicts=('opencode')` 反向闭环，
+- **G1（native pacman 缺 `opencode-wrapper`）→ 无需修**：pacman 的 conflicts 会匹配
+  Provides 虚拟名，若 native 显式声明 `opencode-wrapper` 会误伤 standalone（其
+  `provides=opencode-wrapper`）。现设计由 glibc 侧 `conflicts=('opencode')` 反向闭环，
   实测 glibc 13 版 pacman 全数声明，互斥成立。`PKGBUILD.native` 注释已自证此意图。
-- **G2（compressed deb 缺 `opencode-glibc-standalone`）→ 真缺口，已修**：
+- **G2（compressed deb 缺 `opencode-wrapper-standalone`）→ 真缺口，已修**：
   standalone 的 **deb** 无任何 Provides（grep 证），dpkg 世界无虚拟名桥，
   compressed × standalone 可共存，违反教义。修复 =
   `scripts/package/package_deb_compressed.sh` heredoc（真源）+
   `packing/deb-compressed/DEBIAN/control`（参考副本）同步补名。
-  pacman 侧经 `provides=opencode-glibc` + conflicts 双向检查已闭合，无需改。
+  pacman 侧经 `provides=opencode-wrapper` + conflicts 双向检查已闭合，无需改。
 - 观察项（不动）：glibc 家族保留 `Replaces: opencode`（附录过渡遗产，装 glibc 会
   静默顶掉 native；compressed 则明确 no-Replaces 设计，两者不对称）。属历史决策，
   建议附录收尾时单独裁决。
@@ -128,8 +128,8 @@
 
 | 编号 | 内容 | 状态 | 处置 |
 |------|------|------|------|
-| G2 | compressed deb Conflicts 漏 `opencode-glibc-standalone` | **已修**（本文档同批提交） | heredoc 真源 + 参考副本；**已构建的 compressed 包需重建后生效** |
-| G1 | native pacman conflicts 缺 `opencode-glibc` 字面名 | 无需修 | 故意设计（provides 虚拟名保护），glibc 侧反向闭环实测成立 |
+| G2 | compressed deb Conflicts 漏 `opencode-wrapper-standalone` | **已修**（本文档同批提交） | heredoc 真源 + 参考副本；**已构建的 compressed 包需重建后生效** |
+| G1 | native pacman conflicts 缺 `opencode-wrapper` 字面名 | 无需修 | 故意设计（provides 虚拟名保护），glibc 侧反向闭环实测成立 |
 | R1 | release `Push260903` 资产为降级旧批 | 待办（超本任务权限） | 52 包 + SHA256SUMS 整批重传（本地重铸批已全绿） |
 | R2 | `artifacts/transplant/1.18.25|26` 无 report.json | 待办（记录缺口） | 构建脚本为每版落 report（运行时无影响） |
 | R3 | glibc 保留 `Replaces: opencode` | 观察 | 附录收尾时单独裁决是否移除 |
