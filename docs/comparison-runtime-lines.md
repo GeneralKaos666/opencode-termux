@@ -8,7 +8,7 @@
 |---|---|---|
 | **native 复活线** | 本项目 native-android 分支 · C1 官方 android Bun 底座 + module graph 嫁接复活管线 | 本仓库 `tools/transplant/` |
 | **guysoft 线** | [guysoft/opencode-termux](https://github.com/guysoft/opencode-termux) · 自交叉编译 Bun v1.2.13 bionic 底座 + 同协议嫁接 | 外部仓库（patches + build scripts） |
-| **glibc wrapper 主线** | 本项目 pure-android 分支主线 · bun-termux-loader 包装上游 glibc 二进制 | 本仓库 `Makefile` / `scripts/` / `tools/produce-local.sh` |
+| **wrapper 主线** | 本项目 pure-android 分支主线 · bun-termux-loader 包装上游 glibc 二进制 | 本仓库 `Makefile` / `scripts/` / `tools/produce-local.sh` |
 
 ---
 
@@ -16,7 +16,7 @@
 
 > 所有数字均标注来源文件；guysoft 侧数字来自其仓库 README（2026-08-22 抓取）。
 
-| 维度 | native 复活线（本项目） | guysoft/opencode-termux | glibc wrapper 主线（本项目） |
+| 维度 | native 复活线（本项目） | guysoft/opencode-termux | wrapper 主线（本项目） |
 |---|---|---|---|
 | **运行时机制** | 官方 android Bun v1.3.14（Bionic 直跑）+ opencode module graph 嫁接为单 ELF，ELF 手术复活 compiled-app 入口（`.bun` 节 patch + `R_AARCH64_RELATIVE` 重定位）[docs/transplant.md] | 自交叉编译 Bun v1.2.13 bionic 底座（33 文件 Bun 补丁 + 5 文件 WebKit 补丁），host Bun 1.3.2 构建后提取 module graph 嫁接追加 + 8B footer [guysoft README "How the Standalone Binary Works"] | bun-termux-loader Bionic 薄壳包装上游 `opencode-linux-arm64`（glibc Bun 内嵌），userland exec 经 glibc ld.so 二次加载 [README.md "How it works"] |
 | **运行期依赖** | 零 glibc；interpreter=`/system/bin/linker64` NDK r27c [.omo/evidence/task-26-revive-latest.log verify 段]；python3 仅构建期需要 [docs/transplant.md §0.5] | 零 glibc（NDK r28b 编译，API 24+）；仅 `ripgrep` 为包依赖 [guysoft README Install/Version Pins] | 必须 glibc + openssl-glibc + bash + ncurses [README.md Dependencies 表] |
@@ -137,7 +137,7 @@ host 钉 1.3.2 的原因：36B stride 兼容（Bun ≥1.3.11 变 52B）且 openc
 
 ---
 
-## 4. glibc wrapper 主线详述（本项目 pure-android）
+## 4. wrapper 主线详述（本项目 pure-android）
 
 ### 4.1 实现原理
 

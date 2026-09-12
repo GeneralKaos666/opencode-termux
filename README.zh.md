@@ -3,7 +3,7 @@
 # opencode-termux
 
 OpenCode on Termux。**主线 = native bionic 直跑线**：经 transplant 复活管线产出的
-单个零 glibc Android ELF，以 `opencode` 原名作为正式发布渠道出货。glibc wrapper 线
+单个零 glibc Android ELF，以 `opencode` 原名作为正式发布渠道出货。wrapper 线
 （继承自原 `pure-android` 线）保留为附录维护。当前分支：`native-android`（默认主线）。
 
 ---
@@ -48,7 +48,7 @@ OpenCode on Termux。**主线 = native bionic 直跑线**：经 transplant 复�
 
 ### 安装（主线包名：`opencode`）
 
-native 主线已继承 `opencode` 原名（glibc wrapper 线更名为 `opencode-wrapper`，
+native 主线已继承 `opencode` 原名（wrapper 线更名为 `opencode-wrapper`，
 见[共存矩阵](#包共存矩阵)）：
 
 ```bash
@@ -108,8 +108,8 @@ pacman -U opencode-compressed-<version>-1-aarch64.pkg.tar.xz
 |---|---|---|---|
 | `opencode` | native bionic（主线） | `opencode` | 与 `opencode-wrapper`、`opencode-compressed` 互斥 |
 | `opencode-compressed` | native bionic + UPX | `opencode` | 与 `opencode`、`opencode-wrapper` 互斥 |
-| `opencode-wrapper` | glibc wrapper（附录） | `opencode` | 与 `opencode`、`opencode-compressed` 互斥 |
-| `opencode-wrapper-standalone` | glibc wrapper，单版本冻结 | `opencode-wrapper` | **可与 `opencode` 共存**；仅作回退 |
+| `opencode-wrapper` | wrapper（附录） | `opencode` | 与 `opencode`、`opencode-compressed` 互斥 |
+| `opencode-wrapper-standalone` | wrapper，单版本冻结 | `opencode-wrapper` | **可与 `opencode` 共存**；仅作回退 |
 
 三个以 `opencode` 为入口的包通过包管理器冲突机制相互替换；standalone 包使用独立
 库路径与独立命令名，因此可作为冻结回退与 native 主线并存。
@@ -167,8 +167,8 @@ artifact（CI 不执行产物）。**CI 绿 ≠ 可跑**：最终验收必须本
 | 分支 | 角色 |
 |---|---|
 | `native-android` | **默认主线** — native bionic 线（本分支） |
-| `glibc` | glibc wrapper 线，附录维护（由 `pure-android` 改名） |
-| `archive/glibc-classic` | 旧版 glibc 线，已归档 |
+| `wrapper` | wrapper 线，附录维护（由 `pure-android` 改名） |
+| `archive/wrapper-classic` | 旧版 wrapper 线，已归档 |
 
 ---
 
@@ -179,7 +179,7 @@ Make 构建体系是所有构建和打包操作的最高优先级入口。单个
 
 ```bash
 # 全家族打包
-make family=glibc,native,compressed VER=1.18.27
+make family=wrapper,native,compressed VER=1.18.27
 
 # 按家族构建
 make deb-native VER=1.18.27
@@ -207,7 +207,7 @@ make matrix VERS='1.18.[15-27]' TARGET_HOST=<host> TARGET_USER=<user>
 `opencode-wrapper`，均为 1.18.27-1）。
 
 **Apt flat index**：`https://github.com/Hope2333/opencode-termux/releases/latest/download/Packages.gz`
-（40 条目：13 native + 13 compressed + 13 glibc + 1 standalone）。
+（40 条目：13 native + 13 compressed + 13 wrapper + 1 standalone）。
 
 默认安装优先级：per-repo mirrorlist 服务器（release CDN）优先，Pages 托管源作为回退。
 
@@ -237,7 +237,7 @@ opencode plugin remove <plugin>
 
 ---
 
-## 附录：glibc wrapper 线（继承自 pure-android 线）
+## 附录：wrapper 线（继承自 pure-android 线）
 
 bun-termux-loader 包装方案：上游 `opencode-linux-arm64` 是 glibc 链接的
 Bun 单文件应用（Bun runtime + JS 编译进单个 ELF）。loader 在其前部拼一个
@@ -311,16 +311,16 @@ wrapper+shim（`tools/prebuilt/`）包装，上传 artifact 并写 status JSON�
 ```
 .github/workflows/
   build-native-android.yml    Native 线 CI（evidence-only artifact）
-  build-pure-android.yml      glibc 线 CI（aarch64）
+  build-pure-android.yml      wrapper 线 CI（aarch64）
 tools/
   transplant/                 Native 复活管线（transplant.py / revive_patch.py /
                               swap_tui.py / config/bun-bind.json）
   watcher/                    原生 inotify watcher 守护 + shim 插件桥
-  produce-local.sh            glibc 线：npm 下载 + loader wrap
-  prebuilt/                   glibc 线 CI 用预构建 aarch64 wrapper+shim
+  produce-local.sh            wrapper 线：npm 下载 + loader wrap
+  prebuilt/                   wrapper 线 CI 用预构建 aarch64 wrapper+shim
 scripts/
   fetch-fixtures.sh           transplant-check golden fixtures 预下载
-  build.sh                    Stage prefix（glibc 线；STANDALONE=1 出回退包）
+  build.sh                    Stage prefix（wrapper 线；STANDALONE=1 出回退包）
   launcher.sh                 Runtime dispatcher（cleanup + exec）
   package/package_deb.sh      DEB builder（opencode-wrapper）
   package/package_pacman.sh   Pacman builder（opencode-wrapper）

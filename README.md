@@ -4,7 +4,7 @@
 
 OpenCode on Termux. **Mainline = native bionic direct-run line**: a single zero-glibc
 Android ELF produced by the transplant revive pipeline, shipped as formal releases
-under the plain `opencode` package name. The glibc wrapper line (inherited from the
+under the plain `opencode` package name. The wrapper line (inherited from the
 former `pure-android` line) is kept as appendix maintenance. Current branch:
 `native-android` (default mainline).
 
@@ -53,7 +53,7 @@ official android bun ELF          opencode module graph
 
 ### Install (mainline package: `opencode`)
 
-The native mainline has inherited the plain `opencode` package name (the glibc wrapper
+The native mainline has inherited the plain `opencode` package name (the wrapper
 line was renamed `opencode-wrapper` — see the [coexistence matrix](#package-coexistence-matrix)):
 
 ```bash
@@ -115,8 +115,8 @@ pacman -U opencode-compressed-<version>-1-aarch64.pkg.tar.xz
 |---|---|---|---|
 | `opencode` | native bionic (mainline) | `opencode` | mutually exclusive with `opencode-wrapper` and `opencode-compressed` |
 | `opencode-compressed` | native bionic + UPX | `opencode` | mutually exclusive with `opencode` and `opencode-wrapper` |
-| `opencode-wrapper` | glibc wrapper (appendix) | `opencode` | mutually exclusive with `opencode` and `opencode-compressed` |
-| `opencode-wrapper-standalone` | glibc wrapper, frozen single version | `opencode-wrapper` | **coexists with `opencode`**; rollback only |
+| `opencode-wrapper` | wrapper (appendix) | `opencode` | mutually exclusive with `opencode` and `opencode-compressed` |
+| `opencode-wrapper-standalone` | wrapper, frozen single version | `opencode-wrapper` | **coexists with `opencode`**; rollback only |
 
 The three `opencode`-entry packages replace each other via the package manager's
 conflict mechanism; the standalone package uses an independent lib path and a distinct
@@ -180,8 +180,8 @@ For the full surgery principles, config schema, failure playbooks and FAQ see
 | Branch | Role |
 |---|---|
 | `native-android` | **Default mainline** — native bionic line (this branch) |
-| `glibc` | glibc wrapper line, appendix maintenance (renamed from `pure-android`) |
-| `archive/glibc-classic` | legacy glibc line, archived |
+| `wrapper` | wrapper line, appendix maintenance (renamed from `pure-android`) |
+| `archive/wrapper-classic` | legacy wrapper line, archived |
 
 ---
 
@@ -193,7 +193,7 @@ project source only when something actually breaks.
 
 ```bash
 # Package all families for a version
-make family=glibc,native,compressed VER=1.18.27
+make family=wrapper,native,compressed VER=1.18.27
 
 # Per-family targets
 make deb-native VER=1.18.27
@@ -221,7 +221,7 @@ Packages are distributed through two channels:
 / `opencode-wrapper`, all at 1.18.27-1).
 
 **Apt flat index**: `https://github.com/Hope2333/opencode-termux/releases/latest/download/Packages.gz`
-(40 entries: 13 native + 13 compressed + 13 glibc + 1 standalone).
+(40 entries: 13 native + 13 compressed + 13 wrapper + 1 standalone).
 
 Default install priority: per-repo mirrorlist servers (release CDN) first, Pages-hosted
 source as fallback.
@@ -253,7 +253,7 @@ Bare-name plugin entries in `opencode.json` are legacy (1.2.x-era). See
 
 ---
 
-## Appendix: glibc wrapper line (inherited from the pure-android line)
+## Appendix: wrapper line (inherited from the pure-android line)
 
 The bun-termux-loader wrapping approach: upstream `opencode-linux-arm64` is a
 glibc-linked Bun single-file app (Bun runtime + JS compiled into one ELF). The loader
@@ -329,16 +329,16 @@ prebuilt wrapper+shim (`tools/prebuilt/`), artifact upload plus status JSON.
 ```
 .github/workflows/
   build-native-android.yml    Native line CI (evidence-only artifact)
-  build-pure-android.yml      glibc line CI (aarch64)
+  build-pure-android.yml      wrapper line CI (aarch64)
 tools/
   transplant/                 Native revive pipeline (transplant.py / revive_patch.py /
                               swap_tui.py / config/bun-bind.json)
   watcher/                    Native inotify watcher daemon + shim plugin bridge
-  produce-local.sh            glibc line: npm download + loader wrap
-  prebuilt/                   Prebuilt aarch64 wrapper+shim for glibc line CI
+  produce-local.sh            wrapper line: npm download + loader wrap
+  prebuilt/                   Prebuilt aarch64 wrapper+shim for wrapper line CI
 scripts/
   fetch-fixtures.sh           transplant-check golden fixtures pre-download
-  build.sh                    Stage prefix (glibc line; STANDALONE=1 for rollback pkg)
+  build.sh                    Stage prefix (wrapper line; STANDALONE=1 for rollback pkg)
   launcher.sh                 Runtime dispatcher (cleanup + exec)
   package/package_deb.sh      DEB builder (opencode-wrapper)
   package/package_pacman.sh   Pacman builder (opencode-wrapper)

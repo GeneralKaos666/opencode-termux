@@ -2,7 +2,7 @@
 
 > 日期：2026-09-04 ｜ HEAD：`4aa32af`（branch `native-android`）
 > 范围：Push260903 本地重铸批 = native 1.18.15–1.18.27 全 13 版（deb + pacman 双渠道 26 包），
-> 外加 glibc / standalone / compressed 三个家族的互斥矩阵核对。
+> 外加 wrapper / standalone / compressed 三个家族的互斥矩阵核对。
 > 方法：**字节级产物审计**（python3 ELF/机器码扫描 + ar/tar 成员枚举），不重跑构建。
 > 前置：TUI-COMMON-FIX 已根治公共层不应用补丁 + 陈旧槽位产物问题（见
 > `docs/tui-common-fix.md`，提交 `17b51a4` → `10afa28` → `faf1334`）。本文回答的是：
@@ -84,14 +84,14 @@
 | 家族 | deb Conflicts | pacman conflicts | 备注 |
 |------|---------------|------------------|------|
 | opencode (native) | opencode-wrapper, opencode-compressed | opencode-compressed | pacman 侧**故意**不声明 glibc 字面名，见下 |
-| opencode-wrapper | opencode (+ Replaces: opencode) | opencode (+ replaces) ×13 一致 | 反向闭环承担 native↔glibc 互斥 |
+| opencode-wrapper | opencode (+ Replaces: opencode) | opencode (+ replaces) ×13 一致 | 反向闭环承担 native↔wrapper 互斥 |
 | opencode-wrapper-standalone | opencode-wrapper | opencode-wrapper (+ provides=opencode-wrapper) | 与 native 共存 ✓ |
 | opencode-compressed | opencode, opencode-wrapper | opencode, opencode-wrapper | **deb 侧漏 standalone（G2）** |
 
 - **G1（native pacman 缺 `opencode-wrapper`）→ 无需修**：pacman 的 conflicts 会匹配
   Provides 虚拟名，若 native 显式声明 `opencode-wrapper` 会误伤 standalone（其
   `provides=opencode-wrapper`）。现设计由 glibc 侧 `conflicts=('opencode')` 反向闭环，
-  实测 glibc 13 版 pacman 全数声明，互斥成立。`PKGBUILD.native` 注释已自证此意图。
+  实测 wrapper 13 版 pacman 全数声明，互斥成立。`PKGBUILD.native` 注释已自证此意图。
 - **G2（compressed deb 缺 `opencode-wrapper-standalone`）→ 真缺口，已修**：
   standalone 的 **deb** 无任何 Provides（grep 证），dpkg 世界无虚拟名桥，
   compressed × standalone 可共存，违反教义。修复 =

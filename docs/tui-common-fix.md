@@ -20,7 +20,7 @@
 | 2026-08-26 | v1 守卫 (仅坐标): `if (x >= 0x80000000 or y >= 0x80000000) return;` 插入 `buffer.zig:925` | 重建 FFI 压测: 坐标压力 PASS, scissor-residual FAIL |
 | 2026-08-26 | v2 守卫 (坐标 + scissor): `@min(scissor.width, 0x7FFFFFFF)` 钳位 + `+|` 饱和加法写入 `isPointInScissor` | **342d68d** `fix(opentui): guard negative FFI coords in bufferDrawChar` |
 | 2026-08-27 | beta 发布 1.18.21, 含 seccomp shim + TUI 守卫 v2; `tui_probe` 仅测 `--version` | `956515a` beta channel 标记 |
-| 2026-08-30~09-03 | Push260903 准备: 13 版本 glibc + native 批量构建; 走 `transplant.py` 等长换入 | batch build logs |
+| 2026-08-30~09-03 | Push260903 准备: 13 版本 wrapper + native 批量构建; 走 `transplant.py` 等长换入 | batch build logs |
 | 2026-09-03 | 发现 1.18.27 批量包内嵌 `libopentui.so` 无守卫; `build-libopentui.sh` (UNTRACKED) 未应用 `patches/opentui/*` | `task-tui-common-fix.log` P2 |
 | 2026-09-04 | P3: `build-libopentui.sh` 重写为五步管线; `swap_tui.py` 增加 `has_ffi_guard` 拒收逻辑; canonical .so 917,832B | **17b51a4** `fix(transplant): common-layer libopentui guard` |
 | 2026-09-04 | P4: 补丁扩展覆盖 `packages/native` 树 (`ffi-int-truncation-guards.patch`), differential FFI proof: 新构建 exit=0, 旧 .so exit=134 | **10afa28** `fix(transplant): wire libopentui common layer` |

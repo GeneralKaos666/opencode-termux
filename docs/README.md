@@ -58,8 +58,8 @@ This directory is the single source of truth for the current Termux packing/runt
 
 ## Install policy summary
 
-- Default path: the Make system is the highest-priority entry (`make family=glibc,native,compressed VER=<ver>`); individual tools are help-first.
+- Default path: the Make system is the highest-priority entry (`make family=wrapper,native,compressed VER=<ver>`); individual tools are help-first.
 - The native mainline `opencode` package has zero glibc runtime dependencies (Android API >= 28).
-- The glibc appendix `opencode-wrapper` package is self-contained (bash + ncurses only; no glibc/openssl-glibc packages needed).
+- The wrapper appendix `opencode-wrapper` package is self-contained (bash + ncurses only; no glibc/openssl-glibc packages needed).
 - Pacman path: Termux pacman environments use the same package families.
 - `glibc-runner` is optional fallback tooling (not a primary runtime dependency).
