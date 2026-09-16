@@ -1555,7 +1555,7 @@ def cmd_resolve_base(args) -> int:
     fmt = format_from_ver(args.ver)
     print(f"ver={args.ver} graph_format={fmt}")
     res = resolve_bun_base(fmt, bun_cache, out_dir=out_dir)
-    print(json.dumps(res, indent=2))
+    print(json.dumps(res, indent=2, default=str))
     return 0
 
 

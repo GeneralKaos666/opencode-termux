@@ -235,7 +235,7 @@ def resolve_bun_base(
             trial[-1]["path"] = str(dest)
             if got:
                 trial[-1]["detected_version"] = got
-            return {"path": dest, "version": target, "trial": trial, "verdict": "OK"}
+            return {"path": str(dest), "version": target, "trial": trial, "verdict": "OK"}
         except Exception as e:  # noqa: BLE001
             trial[-1]["status"] = f"failed: {e}"
 
@@ -270,7 +270,7 @@ def resolve_bun_base(
                 _extract_bun_zip(zip_path, dest)
                 trial[-1]["status"] = "ok"
                 trial[-1]["path"] = str(dest)
-                return {"path": dest, "version": latest, "trial": trial, "verdict": "OK"}
+                return {"path": str(dest), "version": latest, "trial": trial, "verdict": "OK"}
             except Exception as e:  # noqa: BLE001
                 trial[-1]["status"] = f"failed: {e}"
     except Exception as e:  # noqa: BLE001
@@ -285,7 +285,7 @@ def resolve_bun_base(
                  "path": str(dest), "satisfies": True}
             )
             return {
-                "path": dest,
+                "path": str(dest),
                 "version": DEFAULT_BUN_VERSION,
                 "trial": trial,
                 "verdict": "OK",
@@ -305,7 +305,7 @@ def resolve_bun_base(
             trial[-1]["status"] = "ok"
             trial[-1]["path"] = str(dest)
             return {
-                "path": dest,
+                "path": str(dest),
                 "version": DEFAULT_BUN_VERSION,
                 "trial": trial,
                 "verdict": "OK",
