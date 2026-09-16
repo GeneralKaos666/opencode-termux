@@ -1,10 +1,15 @@
-# Build OpenCode for Android
-# 1. Clone upstream source → apply patches → bun build --compile
+# DEPRECATED appendix (glibc wrapper line).
+# Mainline is the native transplant pipeline: build-native-android.yml
+# (`make transplant VER=...`, see docs/transplant.md).
+# This workflow builds stock upstream with no top-level patches and is kept
+# for maintenance only. Do not add new patches here; patches/opentui/ belongs
+# to the transplant pipeline, not this checkout.
+# 1. Clone upstream source → bun build --compile
 # 2. Download Android Bun
 # 3. Wrap with bun-termux-loader (pre-built aarch64 wrapper)
 # 4. Package as .deb / .pkg.tar.xz
 
-name: Build OpenCode for Android
+name: "[DEPRECATED/appendix] Build OpenCode for Android (glibc wrapper)"
 
 on:
   workflow_dispatch:
@@ -48,16 +53,20 @@ jobs:
       - name: Clone upstream + apply patches
         run: |
           set -euo pipefail
+          echo "DEPRECATED appendix workflow: mainline is build-native-android.yml (make transplant). Building stock upstream."
           git clone --depth 1 --branch "${{ github.event.inputs.opencode_ref || 'dev' }}" \
             https://github.com/anomalyco/opencode.git out/build/opencode-source 2>&1 || exit 1
           cd out/build/opencode-source
           if [[ -d "$GITHUB_WORKSPACE/patches" ]]; then
+            shopt -s nullglob
             for p in "$GITHUB_WORKSPACE/patches/"*.patch; do
               if [[ -f "$p" ]]; then
                 echo "Applying: $(basename $p)"
-                git apply "$p" 2>&1 || echo "Warning: patch failed (may already be applied)"
+                git apply --check "$p" || { echo "Error: patch $p failed --check"; exit 1; }
+                git apply "$p" || { echo "Error: patch $p failed to apply"; exit 1; }
               fi
             done
+            shopt -u nullglob
           fi
 
       - name: Build OpenCode binary
@@ -146,6 +155,8 @@ jobs:
           Path('out/status/build-status.json').write_text(json.dumps({
             'arch': '${{ matrix.arch }}',
             'status': 'completed',
+            'deprecated': True,
+            'mainline': 'build-native-android.yml (make transplant)',
             'artifacts': assets,
           }, indent=2)+'\n')
           "
