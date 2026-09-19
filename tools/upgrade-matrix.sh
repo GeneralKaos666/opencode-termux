@@ -10,9 +10,6 @@ TARGET_HOME="/data/data/com.termux/files/home"
 #   SSH_STRICT_HOST_KEY StrictHostKeyChecking mode; 'accept-new' detects key
 #                       changes (MITM) after first trust, unlike the old 'no'
 TARGET_PASSWORD="${TARGET_PASSWORD:-}"
-if [ -z "$TARGET_PASSWORD" ]; then
-	die "TARGET_PASSWORD is required. Set it via env var."
-fi
 SSH_STRICT_HOST_KEY="${SSH_STRICT_HOST_KEY:-accept-new}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ODIR="${ODIR:-$REPO_DIR/packing/deb}"
@@ -85,6 +82,7 @@ EOF
 fi
 
 [[ -n "$VERS" ]] || die "VERS must be set"
+[[ -n "$TARGET_PASSWORD" ]] || die "TARGET_PASSWORD is required. Set it via env var."
 command -v sshpass >/dev/null 2>&1 || die "missing sshpass"
 
 versions=()
