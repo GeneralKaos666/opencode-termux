@@ -30,6 +30,18 @@ can be execve'd directly. Zero glibc dependencies, requires Android API >= 28.
 >
 > **v1.18.x line retained** for rollback (cached debs available).
 
+> **opencode 2.0.0 GA** has been transplanted to a native bionic ELF (bun 1.4.2 base)
+> and packaged as `opencode 2.0.0`. Packages: `opencode_2.0.0_aarch64.deb` /
+> `opencode-2.0.0-1-aarch64.pkg.tar.xz` (Package=`opencode`, zero glibc Depends).
+>
+> **Known limitation**: the TUI crashes in the revived binary — bun `getenv_z`
+> segfault in the HTTP-client DNS path (`Segmentation fault at address 0x40`,
+> bun.report signature Aa1744846…). **Headless paths work**: `--version`, `serve`,
+> `run --standalone`, `--help`. The v2 binary is NOT seccomp-hardened (no
+> `libopencode-crhandler.so`).
+>
+> **v1.18.x line retained** for rollback (cached debs available).
+
 ### Highlights
 
 - ✅ **Zero glibc**: no glibc-repo / openssl-glibc needed. The earlier "zero glibc is
