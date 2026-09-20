@@ -495,14 +495,18 @@ deb-compressed:
 		echo "Error: VER is required. Example: make deb-compressed VER=1.18.21"; \
 		exit 1; \
 	fi
-	VERSION=$(VER) OPENCODE_COMPRESSED_BIN=$(NATIVE_DIR)/opencode-native-$(VER)-upx OPENCODE_CRHANDLER_SO=$(NATIVE_DIR)/libopencode-crhandler.so bash scripts/package/package_deb_compressed.sh
+	@bin="$${OPENCODE_COMPRESSED_BIN:-$(NATIVE_DIR)/opencode-native-$(VER)-upx}"; \
+	shim="$${OPENCODE_CRHANDLER_SO:-$(NATIVE_DIR)/libopencode-crhandler.so}"; \
+	VERSION=$(VER) OPENCODE_COMPRESSED_BIN="$$bin" OPENCODE_CRHANDLER_SO="$$shim" bash scripts/package/package_deb_compressed.sh
 
 pacman-compressed:
 	@if [ -z "$(VER_IS_SET)" ]; then \
 		echo "Error: VER is required. Example: make pacman-compressed VER=1.18.21"; \
 		exit 1; \
 	fi
-	VERSION=$(VER) OPENCODE_COMPRESSED_BIN=$(NATIVE_DIR)/opencode-native-$(VER)-upx OPENCODE_CRHANDLER_SO=$(NATIVE_DIR)/libopencode-crhandler.so bash scripts/package/package_pacman_compressed.sh
+	@bin="$${OPENCODE_COMPRESSED_BIN:-$(NATIVE_DIR)/opencode-native-$(VER)-upx}"; \
+	shim="$${OPENCODE_CRHANDLER_SO:-$(NATIVE_DIR)/libopencode-crhandler.so}"; \
+	VERSION=$(VER) OPENCODE_COMPRESSED_BIN="$$bin" OPENCODE_CRHANDLER_SO="$$shim" bash scripts/package/package_pacman_compressed.sh
 
 # Range batch build (multi-version, continue-on-fail)
 # ══════════════════════════════════════════════════════════════════════
@@ -666,3 +670,142 @@ release-upload:
 	fi; \
 	if [ "$$upload_failed" -ne 0 ]; then echo "Error: one or more release assets failed to upload" >&2; exit 1; fi; \
 	echo "=== Done: https://github.com/$(REPO)/releases/tag/$(TAG) ==="
+
+# ══════════════════════════════════════════════════════════════════════
+# V2 (opencode 2.0.0 GA) — three-line build surface
+#
+# Identity: v2 replaces the v1 mainline (package name `opencode`). v1.18.31 is
+# pinned as the final v1 release. Future v1 maintenance (if any) moves to the
+# `opencode1*` package name, mutually exclusive with v2.
+#
+#   Line                TUI   Channel                     make entry
+#   ────────────────────────────────────────────────────────────────────
+#   B native (default)  ✅    android-bun source compile  family-v2-native
+#   B compressed        ✅    + UPX (standalone scheme)   family-v2-compressed
+#   Wrapper (glibc)     ✅    bun-termux-loader wrap      family-v2-wrapper
+#   A+ reserve headless ⚠️    glibc compile -> transplant family-v2-reserve
+#     (non-special use only; TUI unavailable — documented upstream bun bug)
+#
+# Packaging reuses the v1 provider scripts verbatim by overriding
+# TRANSPLANT_ROOT=artifacts/build (B line normalizes products to the
+# opencode-native-revived / -upx contract names).
+# ══════════════════════════════════════════════════════════════════════
+
+# B-line source roots (env overridable)
+V2_SRC ?=
+V2_BUILD_ROOT ?= artifacts/build
+V2_WRAP_ROOT ?= artifacts/wrapper
+V2_GLIBC_STANDALONE ?= $(V2_WRAP_ROOT)/glibc-standalone/opencode
+V2_LOADER_ROOT ?= $(shell if [ -d $(HOME)/bun-termux-loader ]; then echo $(HOME)/bun-termux-loader; else echo $(HOME)/.local/share/bun-termux-loader; fi)
+
+# build-native: B-line compile (android bun) -> artifacts/build/<ver>/opencode-native-revived
+# Usage: make build-native VER=2.0.0 [V2_SRC=...] [OPENTUI_REBUILD=1]
+.PHONY: build-native
+build-native:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make build-native VER=2.0.0"; \
+		exit 1; \
+	fi
+	VER=$(VER) V2_SRC='$(V2_SRC)' bash scripts/build-bionic.sh
+
+# build-native-upx: UPX-compress the B-line product (optional final step)
+.PHONY: build-native-upx
+build-native-upx:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make build-native-upx VER=2.0.0"; \
+		exit 1; \
+	fi
+	@src="artifacts/build/$(VER)/opencode-native-revived"; \
+	if [ ! -f "$$src" ]; then echo "Error: $$src missing; run 'make build-native VER=$(VER)' first"; exit 1; fi; \
+	cp -p "$$src" "artifacts/build/$(VER)/opencode-native-revived-upx"; \
+	upx $(UPX_OPTS) --no-color "artifacts/build/$(VER)/opencode-native-revived-upx"; \
+	sha256sum "artifacts/build/$(VER)/opencode-native-revived-upx" | awk '{print $$1}' > "artifacts/build/$(VER)/build-upx.sha256"; \
+	echo "==> upx: artifacts/build/$(VER)/opencode-native-revived-upx ($$(stat -c%s artifacts/build/$(VER)/opencode-native-revived-upx) B)"
+build-native-upx: UPX_OPTS?=
+
+# family-v2-native: B-line compile + native deb/pacman (v1 provider scripts)
+# Usage: make family-v2-native VER=2.0.0
+.PHONY: family-v2-native
+family-v2-native:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make family-v2-native VER=2.0.0"; \
+		exit 1; \
+	fi
+	$(MAKE) --no-print-directory build-native VER=$(VER) V2_SRC='$(V2_SRC)'
+	TRANSPLANT_ROOT=$(CURDIR)/artifacts/build $(MAKE) --no-print-directory deb-native VER=$(VER)
+	TRANSPLANT_ROOT=$(CURDIR)/artifacts/build $(MAKE) --no-print-directory pacman-native VER=$(VER)
+
+# family-v2-compressed: B-line + UPX + compressed deb/pacman (v1 standalone scheme)
+# Usage: make family-v2-compressed VER=2.0.0
+.PHONY: family-v2-compressed
+family-v2-compressed:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make family-v2-compressed VER=2.0.0"; \
+		exit 1; \
+	fi
+	$(MAKE) --no-print-directory build-native VER=$(VER) V2_SRC='$(V2_SRC)'
+	$(MAKE) --no-print-directory harden-native VER=$(VER)
+	$(MAKE) --no-print-directory build-native-upx VER=$(VER)
+	TRANSPLANT_ROOT=$(CURDIR)/artifacts/build OPENCODE_COMPRESSED_BIN=$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived-upx OPENCODE_CRHANDLER_SO=$(CURDIR)/artifacts/build/$(VER)/libopencode-crhandler.so $(MAKE) --no-print-directory deb-compressed VER=$(VER)
+	TRANSPLANT_ROOT=$(CURDIR)/artifacts/build OPENCODE_COMPRESSED_BIN=$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived-upx OPENCODE_CRHANDLER_SO=$(CURDIR)/artifacts/build/$(VER)/libopencode-crhandler.so $(MAKE) --no-print-directory pacman-compressed VER=$(VER)
+
+# harden-native: seccomp-harden the B-line product (v1 crhandler zero-displacement
+# patch chain): compile tools/shim/sigsys_handler.c into artifacts/build/<ver>/,
+# patch opencode-native-revived in place (DT_NEEDED[0]="libopencode-crhandler.so",
+# pre-patch copy kept as *.pre-crhandler). MUST run BEFORE build-native-upx.
+# Usage: make harden-native VER=2.0.0
+.PHONY: harden-native
+harden-native:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make harden-native VER=2.0.0"; \
+		exit 1; \
+	fi
+	@if ! command -v clang >/dev/null 2>&1; then echo "WARN: clang not found; skipping seccomp hardening"; exit 0; fi
+	@src="$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived"; \
+	if [ ! -f "$$src" ]; then echo "Error: $$src missing; run 'make build-native VER=$(VER)' first"; exit 1; fi; \
+	echo "==> harden-native VER=$(VER)"; \
+	clang -shared -fPIC -O2 -o "$(CURDIR)/artifacts/build/$(VER)/libopencode-crhandler.so" tools/shim/sigsys_handler.c || exit 1; \
+	if grep -aqF libopencode-crhandler.so "$$src"; then \
+		echo "==> already hardened, skip"; \
+		exit 0; \
+	fi; \
+	cp -p "$$src" "$$src.pre-crhandler" || exit 1; \
+	python3 tools/transplant/crhandler_patch.py "$$src" || exit 1; \
+	echo "harden-native: pre-patch copy kept at $$src.pre-crhandler"
+
+
+# wrapper-native: bun-termux-loader wrap of the v2 glibc standalone
+# Produces artifacts/wrapper/<ver>/opencode-wrapper-<ver> (bionic, TUI-capable)
+# Input: standalone glibc ELF (from opencode.ai direct link / npm platform pkg).
+.PHONY: wrapper-native
+wrapper-native:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make wrapper-native VER=2.0.0"; \
+		exit 1; \
+	fi
+	@if [ ! -d "$(V2_LOADER_ROOT)" ]; then \
+		echo "Error: bun-termux-loader not found at $(V2_LOADER_ROOT) (clone https://github.com/emberglazee/bun-termux-loader)"; \
+		exit 1; \
+	fi
+	@if [ ! -x "$(V2_GLIBC_STANDALONE)" ]; then \
+		echo "Error: glibc standalone not found: $(V2_GLIBC_STANDALONE)"; \
+		echo "  Place the v2 glibc standalone ELF at $(V2_WRAP_ROOT)/glibc-standalone/opencode"; \
+		exit 1; \
+	fi
+	@mkdir -p artifacts/wrapper/$(VER)
+	python3 $(V2_LOADER_ROOT)/build.py $(V2_GLIBC_STANDALONE) artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) --wrapper $(V2_LOADER_ROOT)/wrapper --shim $(V2_LOADER_ROOT)/bunfs_shim.so
+	@sha256sum artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) | awk '{print $$1}' | tee artifacts/wrapper/$(VER)/wrapper.sha256
+	@echo "==> wrapper: artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) ($$(stat -c%s artifacts/wrapper/$(VER)/opencode-wrapper-$(VER)) B)"
+
+# family-v2-wrapper: wrap + version smoke (no packaging: wrapper line is
+# documented/reserve only for v2; shipping goes via native line)
+.PHONY: family-v2-wrapper
+family-v2-wrapper:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make family-v2-wrapper VER=2.0.0"; \
+		exit 1; \
+	fi
+	$(MAKE) --no-print-directory wrapper-native VER=$(VER)
+	@echo "==> wrapper smoke:"
+	artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) --version
+
