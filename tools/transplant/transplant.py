@@ -316,11 +316,16 @@ def parse_graph(data: bytes) -> dict:
     byte_count, mod_off, mod_len, entry, argv0, argv1, flags = (
         struct.unpack_from("<QIIIIII", data, o)
     )
-    if mod_off + mod_len != argv0:
+    gap = argv0 - (mod_off + mod_len)
+    if gap < 0:
         raise TransplantError(
-            f"stride check failed: modOff+modLen={mod_off + mod_len} "
-            f"!= argv_off={argv0}"
+            f"overlapping records and argv: modOff+modLen={mod_off + mod_len} "
+            f"> argv_off={argv0}"
         )
+    if gap > 0:
+        print(f"[warn] {gap}-byte gap between records and argv "
+              f"(modOff+modLen={mod_off + mod_len} < argv_off={argv0}); "
+              f"flags=0x{flags:04x}")
     area = mod_len
     if area % RECORD_36 == 0 and area % RECORD_52 != 0:
         layout = RECORD_36
@@ -338,6 +343,7 @@ def parse_graph(data: bytes) -> dict:
         "flags": flags,
         "layout": layout,
         "n": area // layout,
+        "gap_size": gap,
     }
 
 
