@@ -1,0 +1,163 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+
+# build-bionic.sh — v2 Native B-line builder (android-bun source compile).
+#
+# Compiles the opencode v2 source tree with the android (bionic) Bun into a
+# zero-glibc native ELF, then normalizes the product to the packaging contract
+# names so the v1 native/compressed package scripts can be reused verbatim:
+#
+#   artifacts/build/<ver>/opencode-native-revived      (deb-native/pacman-native)
+#   artifacts/build/<ver>/opencode-native-revived-upx  (deb-compressed/pacman-compressed)
+#
+# Command chain, in order:
+#   1. opentui runtime check   — the grafted bionic libopentui.so in the .bun
+#      store must export the 9 v2 FFI symbols + pthread_tryjoin_np stanza;
+#      rebuild via tools/transplant/build-libopentui.sh when missing.
+#   2. platform patch          — tools/build-bionic/apply-platform-patch.sh
+#      (idempotent; forces process.platform="linux" so the loader picks the
+#      bionic linux-arm64 libopentui.so).
+#   3. bundler compile         — bun script/build.ts --target=opencode-linux-arm64
+#      (android bun; openat2_shim LD_PRELOAD for install-only paths; no shim
+#      needed at runtime).
+#   4. normalize               — copy dist output to contract names + write
+#      build.json (sha256 + provenance).
+#
+# Environment:
+#   VER                version tag for the build (default: 2.0.0)
+#   V2_SRC             v2 monorepo root (contains packages/cli/script/build.ts)
+#                      default: $HOME/develop/opencode-src/opencode-<VER> or
+#                      $(TMPDIR)/v2probe/opencode-src/opencode-<VER>
+#   ANDROID_BUN        android bun binary (default: artifacts/transplant/android-bun/bun-1.4.2/bun)
+#   OPENAT2_SHIM       openat2/fchmodat2 LD_PRELOAD shim (default: tools/transplant/toolchain/openat2_shim.so)
+#   OPENTUI_REBUILD    1 = force rebuild of the bionic libopentui.so (default 0 = only when broken)
+#   OPENCODE_VERSION   version string embedded in the binary (default: VER)
+#   BUILD_ROOT         output root (default: artifacts/build)
+#   UPX                set to 1 to also produce the -upx variant
+#   UPX_OPTS           upx flags (default: --best)
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+VER="${VER:-2.0.0}"
+
+# ── resolve v2 source tree ─────────────────────────────────────────────
+if [[ -n "${V2_SRC:-}" ]]; then
+  SRC_DIR="$V2_SRC"
+else
+  for cand in \
+    "$HOME/develop/opencode-src/opencode-$VER" \
+    "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/v2probe/opencode-src/opencode-$VER"; do
+    if [[ -d "$cand/packages/cli" ]]; then SRC_DIR="$cand"; break; fi
+  done
+fi
+[[ -n "${SRC_DIR:-}" && -f "$SRC_DIR/packages/cli/script/build.ts" ]] || {
+  echo "Error: v2 source tree not found (looked for packages/cli/script/build.ts); set V2_SRC=<root>" >&2
+  exit 1
+}
+
+ANDROID_BUN="${ANDROID_BUN:-$ROOT_DIR/artifacts/transplant/android-bun/bun-1.4.2/bun}"
+OPENAT2_SHIM="${OPENAT2_SHIM:-$ROOT_DIR/tools/transplant/toolchain/openat2_shim.so}"
+BUILD_ROOT="${BUILD_ROOT:-$ROOT_DIR/artifacts/build}"
+OUT_DIR="$BUILD_ROOT/$VER"
+OPENCODE_VERSION="${OPENCODE_VERSION:-$VER}"
+ULW_PATCH="$ROOT_DIR/tools/build-bionic/apply-platform-patch.sh"
+
+[[ -x "$ANDROID_BUN" ]] || { echo "Error: ANDROID_BUN not found: $ANDROID_BUN" >&2; exit 1; }
+[[ -f "$OPENAT2_SHIM" ]] || { echo "Error: OPENAT2_SHIM not found: $OPENAT2_SHIM (build via tools/transplant/toolchain/)" >&2; exit 1; }
+
+echo "==> build-bionic VER=$VER"
+echo "    src = $SRC_DIR"
+echo "    bun = $ANDROID_BUN"
+
+# ── 1. opentui bionic runtime check ────────────────────────────────────
+STORE="$SRC_DIR/node_modules/.bun"
+TUI_SO="$(ls "$STORE"/@opentui+core-linux-arm64@*/node_modules/@opentui/core-linux-arm64/libopentui.so 2>/dev/null | head -n1 || true)"
+NEEDED_SYMS=(cancelKittyImageTransport editBufferSetTabWidth getBufferWidthMethod \
+  getKittyImageTransport imageCreateFromPixels imageUpdatePixels pollKittyImageTransport \
+  processKittyImageReply setKittyImageTransport pthread_tryjoin_np)
+TUI_OK=0
+if [[ -n "$TUI_SO" && -f "$TUI_SO" ]]; then
+  TUI_SYMS="$(nm -D "$TUI_SO" 2>/dev/null || true)"
+  missing=0
+  for s in "${NEEDED_SYMS[@]}"; do
+    if ! grep -q " T $s$" <<< "$TUI_SYMS"; then echo "    missing symbol: $s"; missing=1; fi
+  done
+  [[ $missing -eq 0 ]] && TUI_OK=1
+fi
+if [[ -n "$TUI_SO" && -f "$TUI_SO" ]]; then
+  missing=0
+  for s in "${NEEDED_SYMS[@]}"; do
+    nm -D "$TUI_SO" 2>/dev/null | grep -q " T $s$" || { echo "    missing symbol: $s"; missing=1; }
+  done
+  [[ $missing -eq 0 ]] && TUI_OK=1
+fi
+if [[ "$TUI_OK" -eq 1 && "${OPENTUI_REBUILD:-0}" != "1" ]]; then
+  echo "    opentui bionic runtime OK: $TUI_SO"
+elif [[ "${OPENTUI_REBUILD:-0}" == "1" ]]; then
+  echo "==> rebuilding bionic libopentui.so (OPENTUI_REBUILD=1)"
+  bash "$ROOT_DIR/tools/transplant/build-libopentui.sh"
+  TUI_DIR="$(dirname "$TUI_SO")"
+  mkdir -p "$TUI_DIR"
+  cp -f "$ROOT_DIR/artifacts/transplant/opentui-bionic/libopentui.so" "$TUI_DIR/libopentui.so"
+else
+  echo "==> opentui bionic runtime stale/broken; refusing auto-rebuild (patch drift risk)"
+  echo "    TUI_SO=$TUI_SO missing FFI symbols — graft a verified .so then re-run"
+  echo "    (build: make libopentui  OR manual zig build per docs/tui-common-fix.md)"
+  exit 1
+fi
+
+# ── 2. platform patch (idempotent) ─────────────────────────────────────
+CHUNK="$(ls -d "$STORE"/@opentui+core@*/ 2>/dev/null | head -n1 || true)"
+: "${CHUNK:?Error: @opentui+core store chunk not found — run 'bun install --force --ignore-scripts' in $SRC_DIR}"
+"$ULW_PATCH" "${CHUNK%/}"
+
+# ── 3. bundler compile ─────────────────────────────────────────────────
+cd "$SRC_DIR/packages/cli"
+echo "==> compiling (android bun, target=opencode-linux-arm64)"
+LD_PRELOAD="$OPENAT2_SHIM" OPENCODE_VERSION="$OPENCODE_VERSION" \
+  "$ANDROID_BUN" script/build.ts --target=opencode-linux-arm64 --skip-install --skip-web-ui
+DIST_BIN="$SRC_DIR/packages/cli/dist/cli-linux-arm64/bin/opencode"
+[[ -x "$DIST_BIN" ]] || { echo "Error: build output missing: $DIST_BIN" >&2; exit 1; }
+
+# ── 4. normalize to packaging contract names ───────────────────────────
+mkdir -p "$OUT_DIR"
+cp -p "$DIST_BIN" "$OUT_DIR/opencode-native-revived"
+sha256sum "$OUT_DIR/opencode-native-revived" | awk '{print $1}' > "$OUT_DIR/build.sha256"
+echo "==> normalized: $OUT_DIR/opencode-native-revived ($(stat -c%s "$OUT_DIR/opencode-native-revived") B)"
+echo "    sha256: $(cat "$OUT_DIR/build.sha256")"
+
+# ── 5. optional UPX variant ────────────────────────────────────────────
+if [[ "${UPX:-0}" == "1" ]]; then
+  if command -v upx >/dev/null 2>&1; then
+    echo "==> UPX compressing (${UPX_OPTS:---best})"
+    cp -p "$OUT_DIR/opencode-native-revived" "$OUT_DIR/opencode-native-revived-upx"
+    upx ${UPX_OPTS:---best} --no-color "$OUT_DIR/opencode-native-revived-upx"
+    sha256sum "$OUT_DIR/opencode-native-revived-upx" | awk '{print $1}' > "$OUT_DIR/build-upx.sha256"
+    echo "    upx: $(stat -c%s "$OUT_DIR/opencode-native-revived-upx") B"
+  else
+    echo "WARN: upx not found; -upx variant skipped (set UPX=0 or install upx)" >&2
+  fi
+fi
+
+# ── 6. provenance ──────────────────────────────────────────────────────
+python3 - "$OUT_DIR" "$VER" "$SRC_DIR" "$ANDROID_BUN" << 'PYEOF'
+import json, hashlib, os, sys
+out_dir, ver, src, bun = sys.argv[1:5]
+rec = {
+  "version": ver,
+  "kind": "native-b-line",
+  "source": src,
+  "android_bun": bun,
+  "note": "compiled on android bun (bionic); TUI via grafted bionic libopentui.so; headless-channel reserve (A+/A-line) documented separately",
+}
+for name in ("opencode-native-revived", "opencode-native-revived-upx"):
+    p = os.path.join(out_dir, name)
+    if os.path.isfile(p):
+        rec[name] = {
+            "size": os.path.getsize(p),
+            "sha256": hashlib.sha256(open(p, "rb").read()).hexdigest(),
+        }
+with open(os.path.join(out_dir, "build.json"), "w") as f:
+    json.dump(rec, f, indent=2, ensure_ascii=False)
+print("    wrote build.json")
+PYEOF
+echo "==> build-bionic done: $OUT_DIR"
