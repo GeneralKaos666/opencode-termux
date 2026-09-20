@@ -16,15 +16,29 @@ The official prebuilt Android Bun serves as the base. We graft opencode's module
 into the same ELF, run the revive surgery, and produce a single Bionic executable that
 can be execve'd directly. Zero glibc dependencies, requires Android API >= 28.
 
+### v2.0.0 port status (current)
+
+> **opencode 2.0.0 GA** has been transplanted to a native bionic ELF (bun 1.4.2 base)
+> and packaged as `opencode 2.0.0`. Packages: `opencode_2.0.0_aarch64.deb` /
+> `opencode-2.0.0-1-aarch64.pkg.tar.xz` (Package=`opencode`, zero glibc Depends).
+>
+> **Known limitation**: the TUI crashes in the revived binary — bun `getenv_z`
+> segfault in the HTTP-client DNS path (`Segmentation fault at address 0x40`,
+> bun.report signature Aa1744846…). **Headless paths work**: `--version`, `serve`,
+> `run --standalone`, `--help`. The v2 binary is NOT seccomp-hardened (no
+> `libopencode-crhandler.so`).
+>
+> **v1.18.x line retained** for rollback (cached debs available).
+
 ### Highlights
 
 - ✅ **Zero glibc**: no glibc-repo / openssl-glibc needed. The earlier "zero glibc is
   impossible" conclusion was overturned by the revive surgery — the real cause was that
   assemble never patched `BUN_COMPILED.size` in the `.bun` section. See
   `docs/transplant.md` §0.1/§0.2.
-- ✅ **Fully working TUI**: a self-built bionic `libopentui.so` (NDK) is swapped in at
+- ✅ **Fully working TUI** (v1.18.x): a self-built bionic `libopentui.so` (NDK) is swapped in at
   equal length via `tools/transplant/swap_tui.py`. W10a deep smoke passed 5/5 (real
-  chat round trip / resize / clean exit / 5min soak with RSS actually dropping).
+  chat round trip / resize / clean exit / 5min soak with RSS actually dropping). **⚠️ v2.0.0 TUI is broken** — see port status above.
 - ✅ **Native watcher**: `tools/watcher/` provides a standalone daemon module
   (`watcher.c`, NDK inotify recursive watching) plus a plugin-side shim (`shim.js`).
   Fixes the total lack of file watching caused by upstream `@parcel/watcher` failing to
@@ -34,6 +48,18 @@ can be execve'd directly. Zero glibc dependencies, requires Android API >= 28.
 - ✅ **UPX compressed variant**: the same native ELF packed with UPX `--best`, shipped
   as the `opencode-compressed` package family — 71.14% smaller at a measured startup
   cost. See [Compressed variant](#compressed-variant-opencode-compressed-native--upx).
+
+> **Naming legacy note — the `glibc` suffix is historical, NOT a current dependency**
+>
+> The `*-glibc` package names (e.g. `opencode-glibc`) are **legacy naming kept for
+> convenience**: renaming would break existing installs, scripts, and the mirror
+> history. They date from the early node era, when the transplanted node assets
+> genuinely linked against glibc. Since the **revive surgery**, all glibc calls and
+> dependencies have been **completely removed** — current builds are zero-glibc at
+> **both runtime and compile time**, across the wrapper (`*-glibc`), the native
+> mainline (`opencode`, zero-glibc), and the UPX-compressed (`opencode-compressed`)
+> families. "glibc" in a package name today means nothing about runtime linkage;
+> it is purely a frozen historical identifier.
 
 ### How it works
 
@@ -58,7 +84,7 @@ line was renamed `opencode-wrapper` — see the [coexistence matrix](#package-co
 
 ```bash
 # Download from https://github.com/Hope2333/opencode-termux/releases
-# ELF asset names look like opencode-1.18.21-aarch64-android-native
+# ELF asset names look like opencode-2.0.0-aarch64-android-native (or opencode-1.18.21-... for rollback)
 dpkg -i opencode_<version>_aarch64.deb
 # or
 pacman -U opencode-<version>-1-aarch64.pkg.tar.xz
@@ -75,7 +101,7 @@ See [Software source](#software-source) and the
 [wiki install guide](https://hope2333.github.io/wiki/guides/install.html).
 
 ```bash
-opencode --version   # -> 1.18.x
+opencode --version   # -> 2.0.0 (v1.18.x also available for rollback)
 opencode run "hi"
 opencode             # TUI
 ```

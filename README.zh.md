@@ -14,14 +14,27 @@ OpenCode on Termux。**主线 = native bionic 直跑线**：经 transplant 复�
 经 revive 复活手术后产出单个可直接 execve 的 Bionic 可执行文件。零 glibc 依赖，
 要求 Android API >= 28。
 
+### v2.0.0 移植状态（当前）
+
+> **opencode 2.0.0 GA** 已移植到原生 bionic ELF（bun 1.4.2 底座），
+> 打包为 `opencode 2.0.0`。包：`opencode_2.0.0_aarch64.deb` /
+> `opencode-2.0.0-1-aarch64.pkg.tar.xz`（Package=`opencode`，零 glibc Depends）。
+>
+> **已知限制**：TUI 在复活二进制中崩溃——bun `getenv_z` 在 HTTP 客户端 DNS 路径中
+> 段错误（`Segmentation fault at address 0x40`，bun.report 签名 Aa1744846…）。
+> **Headless 路径可用**：`--version`、`serve`、`run --standalone`、`--help`。
+> v2 二进制未启用 seccomp 加固（无 `libopencode-crhandler.so`）。
+>
+> **v1.18.x 线保留**用于回退（缓存 deb 可用）。
+
 ### 功能亮点
 
 - ✅ **零 glibc**：不依赖 glibc-repo / openssl-glibc。此前"零 glibc 不可能"的结论
   已被复活手术推翻——真因是 assemble 从未 patch `.bun` 节的 `BUN_COMPILED.size`。
   详见 `docs/transplant.md` §0.1/§0.2。
-- ✅ **TUI 完整可用**：NDK 自建的 bionic `libopentui.so` 经
+- ✅ **TUI 完整可用**（v1.18.x）：NDK 自建的 bionic `libopentui.so` 经
   `tools/transplant/swap_tui.py` 等长换入。W10a 深度冒烟 5/5 通过（真实聊天往返 /
-  resize / 干净退出 / 5min 浸泡 RSS 反降）。
+  resize / 干净退出 / 5min 浸泡 RSS 反降）。**⚠️ v2.0.0 TUI 已损坏**——见上方移植状态。
 - ✅ **原生 watcher**：`tools/watcher/` 提供独立守护模块（`watcher.c`，NDK inotify
   递归监听）+ 插件侧 shim（`shim.js`）。解决上游 `@parcel/watcher` 在 Termux 上
   加载失败导致的完全无文件监听问题。E2E 三类事件 <100ms，kill -9 自愈 ≤612ms。
@@ -53,7 +66,7 @@ native 主线已继承 `opencode` 原名（wrapper 线更名为 `opencode-wrappe
 
 ```bash
 # 从 https://github.com/Hope2333/opencode-termux/releases 下载
-# ELF 资产名形如 opencode-1.18.21-aarch64-android-native
+# ELF 资产名形如 opencode-2.0.0-aarch64-android-native（或 opencode-1.18.21-... 用于回退）
 dpkg -i opencode_<version>_aarch64.deb
 # 或
 pacman -U opencode-<version>-1-aarch64.pkg.tar.xz
@@ -69,7 +82,7 @@ pacman -Syu   # 后续升级
 详见[软件源](#软件源)与 [wiki 安装指引](https://hope2333.github.io/wiki/guides/install.html)。
 
 ```bash
-opencode --version   # → 1.18.x
+opencode --version   # → 2.0.0（v1.18.x 也可用于回退）
 opencode run "hi"
 opencode             # TUI
 ```
