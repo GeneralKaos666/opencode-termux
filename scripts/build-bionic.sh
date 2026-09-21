@@ -162,7 +162,7 @@ DIST_BIN="$SRC_DIR/packages/cli/dist/cli-linux-arm64/bin/opencode"
 
 # ── 4. normalize to packaging contract names ───────────────────────────
 mkdir -p "$OUT_DIR"
-cp -p "$DIST_BIN" "$OUT_DIR/opencode-native-revived"
+sync; sleep 1; cp -p "$DIST_BIN" "$OUT_DIR/opencode-native-revived"
 sha256sum "$OUT_DIR/opencode-native-revived" | awk '{print $1}' > "$OUT_DIR/build.sha256"
 echo "==> normalized: $OUT_DIR/opencode-native-revived ($(stat -c%s "$OUT_DIR/opencode-native-revived") B)"
 echo "    sha256: $(cat "$OUT_DIR/build.sha256")"
