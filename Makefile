@@ -809,3 +809,23 @@ family-v2-wrapper:
 	@echo "==> wrapper smoke:"
 	artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) --version
 
+
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make harden-native VER=2.0.0"; \
+		exit 1; \
+	fi
+	@src="$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived"; \
+	if [ ! -f "$$src" ]; then \
+		echo "Error: $$src missing; run 'make build-native VER=$(VER)' first"; \
+		exit 1; \
+	fi; \
+	echo "==> harden-native VER=$(VER)"; \
+	clang -shared -fPIC -O2 -o "$(CURDIR)/artifacts/build/$(VER)/libopencode-crhandler.so" tools/shim/sigsys_handler.c || exit 1; \
+	@out="$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived-crh"; \
+	if [ -f "$$out" ] && grep -aqF "libopencode-crhandler.so" "$$out"; then \
+		echo "==> already hardened, skip"; \
+		exit 0; \
+	fi; \
+	cp -p "$$src" "$$out" || exit 1; \
+	python3 tools/transplant/toolchain/crhandler_patch.py "$$out" || exit 1; \
+	echo "harden-native: hardened COPY at $$out; main product $$src pristine"
