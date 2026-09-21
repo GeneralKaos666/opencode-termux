@@ -92,9 +92,9 @@ echo "    bun = $ANDROID_BUN"
 # ── 1. opentui bionic runtime check ────────────────────────────────────
 STORE="$SRC_DIR/node_modules/.bun"
 # ── 0.5 install dependencies (required for store/opentui check) ────────
-echo "==> installing dependencies (bun install --force --ignore-scripts)..."
+echo "==> installing dependencies (bun install --force --ignore-scripts + shim)..."
 cd "$SRC_DIR/packages/cli"
-"$ANDROID_BUN" install --force --ignore-scripts 2>&1 | tail -3 || {
+LD_PRELOAD="$OPENAT2_SHIM" "$ANDROID_BUN" install --force --ignore-scripts 2>&1 | tail -3 || {
   echo "WARN: bun install failed; continuing without store" >&2
 }
 cd "$ROOT_DIR"
