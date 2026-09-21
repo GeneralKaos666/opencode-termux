@@ -77,9 +77,6 @@ fi
   }
   SRC_DIR="$EXTRACT_DIR"
 }
-  echo "Error: v2 source tree not found (looked for packages/cli/script/build.ts); set V2_SRC=<root>" >&2
-  exit 1
-}
 
 ANDROID_BUN="${ANDROID_BUN:-$ROOT_DIR/artifacts/transplant/android-bun/bun-1.4.2/bun}"
 OPENAT2_SHIM="${OPENAT2_SHIM:-$ROOT_DIR/tools/transplant/toolchain/openat2_shim.so}"
