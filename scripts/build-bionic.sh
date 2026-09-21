@@ -98,7 +98,16 @@ LD_PRELOAD="$OPENAT2_SHIM" "$ANDROID_BUN" install --force --ignore-scripts 2>&1 
   echo "WARN: bun install failed; continuing without store" >&2
 }
 cd "$ROOT_DIR"
+cd "$ROOT_DIR"
 
+# ── 0.6 install platform-specific packages (android reports platform=android) ─
+echo "==> installing platform packages (pty, watcher, fonts)..."
+cd "$SRC_DIR/packages/cli"
+LD_PRELOAD="$OPENAT2_SHIM" "$ANDROID_BUN" install --force --ignore-scripts --os=linux --cpu=arm64 \
+  @opencode-ai/pty-linux-arm64-gnu@0.1.13 @parcel/watcher-linux-arm64-glibc@2.5.1 \
+  @opentui/core-linux-arm64@0.5.10 @opentui/core-linux-arm64-musl@0.5.10 \
+  @opentui/solid-linux-arm64@0.5.10 2>&1 | tail -3 || echo "WARN: platform package install failed" >&2
+cd "$ROOT_DIR"
 TUI_SO="$(ls "$STORE"/@opentui+core-linux-arm64@*/node_modules/@opentui/core-linux-arm64/libopentui.so 2>/dev/null | head -n1 || ls "$STORE"/@opentui+core@*/node_modules/@opentui/core/libopentui.so 2>/dev/null | head -n1 || true)"
 # Auto-deploy bionic .so if missing from store
 if [[ -z "$TUI_SO" || ! -f "$TUI_SO" ]]; then
