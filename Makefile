@@ -97,6 +97,33 @@ all: clean runtime stage
 		$(MAKE) deb VERSION=$$V && $(MAKE) pacman VERSION=$$V; \
 	fi
 
+
+batch-v2:
+	@if [ -z "$(VERS)" ]; then \
+		echo "Error: VERS is empty. Example: make batch-v2 VERS='2.0.[0-12]' PKG=both"; \
+		exit 1; \
+	fi
+	@expanded=(); \
+	for token in $(VERS); do \
+		if [[ "$$token" =~ ^([0-9]+\.[0-9]+)\.\[([0-9]+)-([0-9]+)\]$$ ]]; then \
+			base="$${BASH_REMATCH[1]}"; start="$${BASH_REMATCH[2]}"; end="$${BASH_REMATCH[3]}"; \
+			for ((i=start; i<=end; i++)); do expanded+=("$$base.$$i"); done; \
+		else \
+			expanded+=("$$token"); \
+		fi; \
+	done; \
+	for v in "$${expanded[@]}"; do \
+		echo "=== Batch v2 build for version $$v ==="; \
+		if [ "$(PKG)" = "both" ] || [ "$(PKG)" = "native" ]; then \
+			$(MAKE) family-v2-native VER=$$v || exit 1; \
+		fi; \
+		if [ "$(PKG)" = "both" ] || [ "$(PKG)" = "compressed" ]; then \
+			$(MAKE) family-v2-compressed VER=$$v || exit 1; \
+		fi; \
+		if [ "$(PKG)" = "both" ] || [ "$(PKG)" = "wrapper" ]; then \
+			$(MAKE) family-v2-wrapper VER=$$v || exit 1; \
+		fi; \
+	done
 batch:
 	@if [ -z "$(VERS)" ]; then \
 		echo "Error: VERS is empty. Example: make batch VERS='1.2.10 1.2.11' PKG=both"; \
