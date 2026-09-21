@@ -108,38 +108,30 @@ LD_PRELOAD="$OPENAT2_SHIM" "$ANDROID_BUN" install --force --ignore-scripts --os=
   @opentui/core-linux-arm64@0.5.10 @opentui/core-linux-arm64-musl@0.5.10 \
   @opentui/solid-linux-arm64@0.5.10 2>&1 | tail -3 || echo "WARN: platform package install failed" >&2
 cd "$ROOT_DIR"
-TUI_SO="$(ls "$STORE"/@opentui+core-linux-arm64@*/node_modules/@opentui/core-linux-arm64/libopentui.so 2>/dev/null | head -n1 || ls "$STORE"/@opentui+core@*/node_modules/@opentui/core/libopentui.so 2>/dev/null | head -n1 || true)"
-# Auto-deploy bionic .so if missing from store
-if [[ -z "$TUI_SO" || ! -f "$TUI_SO" ]]; then
-  BUILTIN="$ROOT_DIR/artifacts/transplant/opentui-bionic/libopentui.so"
-  if [[ -f "$BUILTIN" ]]; then
-STORE_DIR=$(ls -d "$STORE"/@opentui+core-linux-arm64@*/node_modules/@opentui/core-linux-arm64/ 2>/dev/null | head -n1 || ls -d "$STORE"/@opentui+core@*/node_modules/@opentui/core/ 2>/dev/null | head -n1)
-    if [[ -n "$STORE_DIR" ]]; then
-      cp -p "$BUILTIN" "$STORE_DIR/libopentui.so"
-      TUI_SO="$STORE_DIR/libopentui.so"
-      echo "    deployed bionic libopentui.so to store"
-    fi
-  fi
-fi
 NEEDED_SYMS=(cancelKittyImageTransport editBufferSetTabWidth getBufferWidthMethod \
   getKittyImageTransport imageCreateFromPixels imageUpdatePixels pollKittyImageTransport \
   processKittyImageReply setKittyImageTransport pthread_tryjoin_np)
+
+# ── ALWAYS deploy verified bionic .so to store (bun install may overwrite with glibc version) ──
+BUILTIN="$ROOT_DIR/artifacts/transplant/opentui-bionic/libopentui.so"
+STORE_DIR="$(ls -d "$STORE"/@opentui+core-linux-arm64@*/node_modules/@opentui/core-linux-arm64/ 2>/dev/null | head -n1 || ls -d "$STORE"/@opentui+core@*/node_modules/@opentui/core/ 2>/dev/null | head -n1 || true)"
+if [[ -n "$STORE_DIR" && -f "$BUILTIN" ]]; then
+  cp -p "$BUILTIN" "$STORE_DIR/libopentui.so"
+  echo "    deployed verified bionic libopentui.so to store"
+fi
+TUI_SO="$(ls "$STORE"/@opentui+core-linux-arm64@*/node_modules/@opentui/core-linux-arm64/libopentui.so 2>/dev/null | head -n1 || ls "$STORE"/@opentui+core@*/node_modules/@opentui/core/libopentui.so 2>/dev/null | head -n1 || true)"
+
+# ── Verify FFI symbols ──
 TUI_OK=0
 if [[ -n "$TUI_SO" && -f "$TUI_SO" ]]; then
   TUI_SYMS="$(nm -D "$TUI_SO" 2>/dev/null || true)"
   missing=0
   for s in "${NEEDED_SYMS[@]}"; do
-    if ! grep -q " T $s$" <<< "$TUI_SYMS"; then echo "    missing symbol: $s"; missing=1; fi
+    grep -qw "$s" <<< "$TUI_SYMS" || { echo "    missing symbol: $s"; missing=1; }
   done
   [[ $missing -eq 0 ]] && TUI_OK=1
 fi
-if [[ -n "$TUI_SO" && -f "$TUI_SO" ]]; then
-  missing=0
-  for s in "${NEEDED_SYMS[@]}"; do
-    nm -D "$TUI_SO" 2>/dev/null | grep -q " T $s$" || { echo "    missing symbol: $s"; missing=1; }
-  done
-  [[ $missing -eq 0 ]] && TUI_OK=1
-fi
+
 if [[ "$TUI_OK" -eq 1 && "${OPENTUI_REBUILD:-0}" != "1" ]]; then
   echo "    opentui bionic runtime OK: $TUI_SO"
 elif [[ "${OPENTUI_REBUILD:-0}" == "1" ]]; then
