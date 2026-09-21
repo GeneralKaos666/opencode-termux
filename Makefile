@@ -20,24 +20,24 @@ NATIVE ?=
 VER_IS_SET = $(filter-out file default,$(origin VER))
 NATIVE_VER = $(if $(VER_IS_SET),$(VER),$(VERS))
 NATIVE_DIR = artifacts/transplant/$(NATIVE_VER)
-# family array knob: family=glibc,native,compressed (comma or space separated, order preserved)
+# family array knob: family=wrapper,native,compressed (comma or space separated, order preserved)
 comma := ,
 FAMILY_LIST = $(strip $(subst $(comma), ,$(family)))
 
 OUTPUT_ROOT := $(if $(ODIR),$(ODIR),$(CURDIR)/packing)
 
-.PHONY: help all runtime stage deb pacman deb-native pacman-native native-pkg batch clean status steps matrix selfcheck release-upload test transplant transplant-predict transplant-check transplant-upx seccomp-harden family-glibc family-native family-compressed deb-compressed pacman-compressed range-build fleet-upx fleet-status sha-stage push-stage clean-artifacts
+.PHONY: help all runtime stage deb pacman deb-native pacman-native native-pkg batch clean status steps matrix selfcheck release-upload test transplant transplant-predict transplant-check transplant-upx seccomp-harden family-wrapper family-native family-compressed deb-compressed pacman-compressed range-build fleet-upx fleet-status sha-stage push-stage clean-artifacts
 
 help:
 	@echo "OpenCode Termux build helper"
 	@echo
 	@echo "━━━ [Families] Single-version per-family builds ━━━"
-	@echo "  make family-glibc VER=1.18.21       # glibc wrapper (deb + pacman)"
+	@echo "  make family-wrapper VER=1.18.21       # wrapper (deb + pacman)"
 	@echo "  make family-native VER=1.18.21      # transplant + seccomp-harden + native pkgs"
 	@echo "  make family-compressed VER=1.18.21  # UPX-compressed variant (local)"
 	@echo
 	@echo "━━━ [Range Batch] Multi-version builds ━━━"
-	@echo "  make range-build FROM=1.18.15 TO=1.18.27 LINES=glibc,native"
+	@echo "  make range-build FROM=1.18.15 TO=1.18.27 LINES=wrapper,native"
 	@echo "    Features: continue-on-fail, npm retry ≤3, disk guardrail, SHA256SUMS"
 	@echo
 	@echo "━━━ [Fleet] Distributed UPX ━━━"
@@ -64,7 +64,7 @@ help:
 	@echo
 	@echo "━━━ [Housekeeping] ━━━"
 	@echo "  make clean-artifacts VER=1.18.21   # remove transplant artifacts"
-	@echo "  make clean                          # remove glibc staging"
+	@echo "  make clean                          # remove wrapper staging"
 	@echo
 	@echo "━━━ [Transplant Notes] ━━━"
 	@echo "  section-format graphs require android Bun base >= 1.4.0"
@@ -149,8 +149,8 @@ pacman:
 	fi
 
 # Native provider packaging (transplant revival line, stable mainline since 27/28).
-# Provides the same `opencode` command as the glibc wrapper packages; the two
-# providers conflict (installing one replaces the other). The glibc wrapper line is now the appendix (renamed opencode-wrapper); native is the stable mainline.
+# Provides the same `opencode` command as the wrapper packages; the two
+# providers conflict (installing one replaces the other). The wrapper line is now the appendix (renamed opencode-wrapper); native is the stable mainline.
 deb-native:
 	@if [ -z "$(VER_IS_SET)" ]; then \
 		echo "Error: VER is required. Example: make deb-native VER=1.18.21"; \
@@ -202,7 +202,7 @@ matrix:
 	@VERS='$(VERS)' ODIR='$(ODIR)' TARGET_HOST='$(TARGET_HOST)' TARGET_PORT='$(TARGET_PORT)' TARGET_USER='$(TARGET_USER)' ./tools/upgrade-matrix.sh
 
 # transplant: build native android binary via transplant pipeline
-# (tools/transplant/transplant.py, zero-glibc native-android path)
+# (tools/transplant/transplant.py, zero-wrapper native-android path)
 # Output: artifacts/transplant/<ver>/opencode-native + report.json
 # bun-base pairing is resolved internally from tools/transplant/config/bun-bind.json
 # (min_base_for_section: section-format graphs require android Bun base >= 1.4.0;
@@ -374,9 +374,9 @@ transplant-check:
 # Grouped family targets (single-version per-family builds)
 # ══════════════════════════════════════════════════════════════════════
 
-# family-glibc: build glibc wrapper packages for a single version
-# Usage: make family-glibc VER=1.18.21
-family-glibc: runtime stage
+# family-wrapper: build wrapper packages for a single version
+# Usage: make family-wrapper VER=1.18.21
+family-wrapper: runtime stage
 	@if [ "$(PKG)" = "deb" ]; then \
 		$(MAKE) deb VER=$(VER); \
 	elif [ "$(PKG)" = "pacman" ]; then \
@@ -407,24 +407,24 @@ family-compressed:
 	$(MAKE) deb-compressed VER=$(VER) && $(MAKE) pacman-compressed VER=$(VER)
 
 # family: array dispatcher over the three family chains (FEATURE: family as ARRAY)
-# Usage: make family=glibc,native,compressed VER=1.18.21   (comma or space separated)
-#        Order is preserved as given; canonical order is glibc -> native -> compressed.
+# Usage: make family=wrapper,native,compressed VER=1.18.21   (comma or space separated)
+#        Order is preserved as given; canonical order is wrapper -> native -> compressed.
 .PHONY: family
 family:
 	@if [ -z "$(VER_IS_SET)" ]; then \
-		echo "Error: VER is required. Example: make family=glibc,native VER=1.18.21"; \
+		echo "Error: VER is required. Example: make family=wrapper,native VER=1.18.21"; \
 		exit 1; \
 	fi
 	@if [ -z "$(FAMILY_LIST)" ]; then \
-		echo "Error: family is empty. Valid entries: glibc, native, compressed (comma or space separated)."; \
+		echo "Error: family is empty. Valid entries: wrapper, native, compressed (comma or space separated)."; \
 		exit 1; \
 	fi
 	@invalid=""; \
 	for f in $(FAMILY_LIST); do \
-		case "$$f" in glibc|native|compressed) ;; *) invalid="$$invalid $$f" ;; esac; \
+		case "$$f" in wrapper|native|compressed) ;; *) invalid="$$invalid $$f" ;; esac; \
 	done; \
 	if [ -n "$$invalid" ]; then \
-		echo "Error: unknown family:$$invalid (valid: glibc, native, compressed)"; \
+		echo "Error: unknown family:$$invalid (valid: wrapper, native, compressed)"; \
 		exit 1; \
 	fi
 	@for f in $(FAMILY_LIST); do \
@@ -512,15 +512,15 @@ pacman-compressed:
 # ══════════════════════════════════════════════════════════════════════
 
 # range-build: build multiple versions across families with resilience
-# Usage: make range-build FROM=1.18.15 TO=1.18.27 LINES=glibc,native
+# Usage: make range-build FROM=1.18.15 TO=1.18.27 LINES=wrapper,native
 # Features: continue-on-fail, npm retry ≤3, disk guardrail, SHA256SUMS accumulation
 range-build:
 	@if [ -z "$(FROM)" ] || [ -z "$(TO)" ]; then \
-		echo "Error: FROM and TO are required. Example: make range-build FROM=1.18.15 TO=1.18.27 LINES=glibc,native"; \
+		echo "Error: FROM and TO are required. Example: make range-build FROM=1.18.15 TO=1.18.27 LINES=wrapper,native"; \
 		exit 1; \
 	fi
 	@if [ -z "$(LINES)" ]; then \
-		echo "Error: LINES is required (glibc,native[,compressed])"; \
+		echo "Error: LINES is required (wrapper,native[,compressed])"; \
 		exit 1; \
 	fi
 	bash scripts/range-build.sh FROM=$(FROM) TO=$(TO) LINES=$(LINES)
@@ -636,9 +636,9 @@ release-upload:
 	if ! gh release view "$(TAG)" --repo "$(REPO)" >/dev/null 2>&1; then \
 		echo "Creating release $(TAG)..."; \
 		if [ "$(NATIVE)" = "STABLE" ]; then \
-			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "OpenCode for Termux. Mainline (stable since 27/28): native bionic line - opencode-<ver>-aarch64-android-native / opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* - zero-glibc, full TUI, Android API>=28. Appendix (legacy): glibc wrapper packages opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.*." 2>&1 || exit 1; \
+			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "OpenCode for Termux. Mainline (stable since 27/28): native bionic line - opencode-<ver>-aarch64-android-native / opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* - zero-wrapper, full TUI, Android API>=28. Appendix (legacy): wrapper packages opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.*." 2>&1 || exit 1; \
 		else \
-			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "Dual-track OpenCode for Termux. Track 1 (glibc appendix, renamed opencode-wrapper): glibc wrapper packages opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.* - full TUI. Track 2 (native, stable mainline since 27/28): opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* / *-android-native assets - zero-glibc, full TUI (bionic libopentui.so, W10a 5/5), Android API>=28." 2>&1 || exit 1; \
+			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "Dual-track OpenCode for Termux. Track 1 (wrapper appendix, renamed opencode-wrapper): wrapper packages opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.* - full TUI. Track 2 (native, stable mainline since 27/28): opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* / *-android-native assets - zero-wrapper, full TUI (bionic libopentui.so, W10a 5/5), Android API>=28." 2>&1 || exit 1; \
 		fi; \
 	else \
 		echo "Release $(TAG) exists; rebinding tag to HEAD via gh api (HTTPS, SSH 22 blocked)..."; \
@@ -652,7 +652,7 @@ release-upload:
 	done; \
 	mkdir -p "$(RELEASE_DIR)"; \
 	echo "--- Dual-track asset naming ---"; \
-	echo "    glibc wrapper line (appendix, renamed opencode-wrapper): opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.*"; \
+	echo "    wrapper line (appendix, renamed opencode-wrapper): opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.*"; \
 	echo "    native line (stable mainline since 27/28): opencode-<ver>-aarch64-android-native / opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* / opencode-<ver>-report.json / opencode-<ver>-watcher.tar.gz"; \
 	if [ "$(NATIVE)" = "1" ] || [ "$(NATIVE)" = "STABLE" ]; then \
 		cp "$(NATIVE_DIR)/opencode-native-revived" "$(RELEASE_DIR)/opencode-$(NATIVE_VER)-aarch64-android-native"; \
@@ -682,8 +682,8 @@ release-upload:
 #   ────────────────────────────────────────────────────────────────────
 #   B native (default)  ✅    android-bun source compile  family-v2-native
 #   B compressed        ✅    + UPX (standalone scheme)   family-v2-compressed
-#   Wrapper (glibc)     ✅    bun-termux-loader wrap      family-v2-wrapper
-#   A+ reserve headless ⚠️    glibc compile -> transplant family-v2-reserve
+#   Wrapper     ✅    bun-termux-loader wrap      family-v2-wrapper
+#   A+ reserve headless ⚠️    wrapper compile -> transplant family-v2-reserve
 #     (non-special use only; TUI unavailable — documented upstream bun bug)
 #
 # Packaging reuses the v1 provider scripts verbatim by overriding
@@ -695,7 +695,7 @@ release-upload:
 V2_SRC ?=
 V2_BUILD_ROOT ?= artifacts/build
 V2_WRAP_ROOT ?= artifacts/wrapper
-V2_GLIBC_STANDALONE ?= $(V2_WRAP_ROOT)/glibc-standalone/opencode
+V2_WRAPPER_STANDALONE ?= $(V2_WRAP_ROOT)/wrapper-standalone/opencode
 V2_LOADER_ROOT ?= $(shell if [ -d $(HOME)/bun-termux-loader ]; then echo $(HOME)/bun-termux-loader; else echo $(HOME)/.local/share/bun-termux-loader; fi)
 
 # build-native: B-line compile (android bun) -> artifacts/build/<ver>/opencode-native-revived
@@ -774,9 +774,9 @@ harden-native:
 	echo "harden-native: pre-patch copy kept at $$src.pre-crhandler"
 
 
-# wrapper-native: bun-termux-loader wrap of the v2 glibc standalone
+# wrapper-native: bun-termux-loader wrap of the v2 wrapper standalone
 # Produces artifacts/wrapper/<ver>/opencode-wrapper-<ver> (bionic, TUI-capable)
-# Input: standalone glibc ELF (from opencode.ai direct link / npm platform pkg).
+# Input: standalone wrapper ELF (from opencode.ai direct link / npm platform pkg).
 .PHONY: wrapper-native
 wrapper-native:
 	@if [ -z "$(VER_IS_SET)" ]; then \
@@ -787,13 +787,13 @@ wrapper-native:
 		echo "Error: bun-termux-loader not found at $(V2_LOADER_ROOT) (clone https://github.com/emberglazee/bun-termux-loader)"; \
 		exit 1; \
 	fi
-	@if [ ! -x "$(V2_GLIBC_STANDALONE)" ]; then \
-		echo "Error: glibc standalone not found: $(V2_GLIBC_STANDALONE)"; \
-		echo "  Place the v2 glibc standalone ELF at $(V2_WRAP_ROOT)/glibc-standalone/opencode"; \
+	@if [ ! -x "$(V2_WRAPPER_STANDALONE)" ]; then \
+		echo "Error: wrapper standalone not found: $(V2_WRAPPER_STANDALONE)"; \
+		echo "  Place the v2 wrapper standalone ELF at $(V2_WRAP_ROOT)/wrapper-standalone/opencode"; \
 		exit 1; \
 	fi
 	@mkdir -p artifacts/wrapper/$(VER)
-	python3 $(V2_LOADER_ROOT)/build.py $(V2_GLIBC_STANDALONE) artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) --wrapper $(V2_LOADER_ROOT)/wrapper --shim $(V2_LOADER_ROOT)/bunfs_shim.so
+	python3 $(V2_LOADER_ROOT)/build.py $(V2_WRAPPER_STANDALONE) artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) --wrapper $(V2_LOADER_ROOT)/wrapper --shim $(V2_LOADER_ROOT)/bunfs_shim.so
 	@sha256sum artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) | awk '{print $$1}' | tee artifacts/wrapper/$(VER)/wrapper.sha256
 	@echo "==> wrapper: artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) ($$(stat -c%s artifacts/wrapper/$(VER)/opencode-wrapper-$(VER)) B)"
 

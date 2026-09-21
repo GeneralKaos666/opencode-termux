@@ -56,7 +56,7 @@ Priority: optional
 Breaks: opencode (<< $VERSION), opencode-glibc (<< $VERSION)
 Conflicts: opencode, opencode-native, opencode-compressed, opencode-glibc
 Replaces: opencode-glibc
-Description: OpenCode AI coding assistant for Termux (glibc appendix, renamed opencode-wrapper)
+Description: OpenCode AI coding assistant for Termux (wrapper appendix, renamed opencode-wrapper)
  Alternative provider: opencode-native (stable mainline since 27/28, full TUI).
 Depends: bash, ncurses
 EOF
