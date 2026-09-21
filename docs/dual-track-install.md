@@ -142,3 +142,26 @@ resolve the conflict by replacing the other provider.
 
 - 安装一律取 `Push260906`（或更新的 tag）：native 主线下 `opencode_<v>_aarch64.deb` / `opencode-<v>-1-aarch64.pkg.tar.xz`；wrapper 附录下 `opencode-wrapper_<v>_aarch64.deb` / `opencode-wrapper-<v>-1-aarch64.pkg.tar.xz`；压缩变体 `opencode-compressed_*`；UPX 运行时资产 `opencode-native-<v>-upx.xz`。
 - 勿从 `Push260903`（降级批次）下载任何资产。
+
+## v2.0.0 GA 替换说明（2026-09-21）
+
+opencode 2.0.0 是全线替换版本（GA mainline），v1.18.31 为 v1 最终封版。
+
+| | v1（1.18.31 封版） | v2（2.0.0 GA） |
+|---|---|---|
+| 构建线 | A 线（transplant 复活） | **B 线（android bun 源码编译）** |
+| 包名 | `opencode`（native）/ `opencode-wrapper`（glibc） | 同 v1（继承包名） |
+| TUI | ✅ | ✅（B 线构建） |
+| 插件 | V1 格式 | **V2 不兼容 V1** |
+
+### v1 包名变更（条件性）
+
+如果后续 v1 出新版本需维护，包名从 `opencode*` 改为 `opencode1*`，与 v2 互斥。
+
+### v1 wrapper standalone 弃用
+
+`opencode-wrapper-standalone`（单版本冻结回退包）已弃用，不再发布新版本。
+
+- v1.18.31 是最后一个含 standalone 资产的 Release（Push260912）
+- 如果需要回退，直接安装 v1.18.31 的 `opencode` 或 `opencode-wrapper` 包
+- standalone 包与 `opencode` 可共存的特性不再维护
