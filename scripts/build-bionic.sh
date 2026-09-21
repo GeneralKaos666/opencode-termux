@@ -197,6 +197,11 @@ sha256sum "$OUT_DIR/opencode-native-revived" | awk '{print $1}' > "$OUT_DIR/buil
 echo "==> normalized: $OUT_DIR/opencode-native-revived ($(stat -c%s "$OUT_DIR/opencode-native-revived") B)"
 echo "    sha256: $(cat "$OUT_DIR/build.sha256")"
 
+# ── 4b. cleanup node_modules (save disk for batch builds) ──
+echo "==> cleaning source tree node_modules to save disk..."
+rm -rf "$SRC_DIR/node_modules" 2>/dev/null || true
+rm -rf "$SRC_DIR/packages/cli/node_modules" 2>/dev/null || true
+
 # ── 5. optional UPX variant ────────────────────────────────────────────
 if [[ "${UPX:-0}" == "1" ]]; then
   if command -v upx >/dev/null 2>&1; then
