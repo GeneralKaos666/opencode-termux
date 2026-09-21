@@ -147,6 +147,36 @@ else
   exit 1
 fi
 
+# ── 1b. install linux platform packages (android bun reports platform=android) ──
+echo "==> installing linux platform packages (pty, watcher)..."
+cd "$SRC_DIR"
+for pkg in "@opencode-ai/pty@0.1.13" "@parcel/watcher-linux-arm64-glibc@2.5.1"; do
+  pkg_name="${pkg%%@*}"
+  pkg_short="${pkg_name##*/}"
+  # Check if already installed in store (any platform variant)
+  if ls "$STORE"/${pkg_name//\//+}@*/node_modules/$pkg_name/package.json &>/dev/null; then
+    echo "    $pkg_short already in store"
+  else
+    echo "    installing $pkg..."
+    LD_PRELOAD="$OPENAT2_SHIM" "$ANDROID_BUN" install --force --ignore-scripts --os=linux --cpu=arm64 "$pkg" 2>&1 | tail -1 || true
+  fi
+  # Ensure platform-specific binary is in node_modules (store may use platform-agnostic key)
+  PTY_BIN="$(find "$STORE" -path "*/$pkg_name/bin/opencode-pty" -type f 2>/dev/null | head -n1 || true)"
+  if [[ -z "$PTY_BIN" ]]; then
+    # Fallback: try platform-specific store key
+    PTY_BIN="$(find "$STORE" -path "*/${pkg_name}-linux-arm64-gnu/bin/opencode-pty" -type f 2>/dev/null | head -n1 || true)"
+  fi
+  if [[ -n "$PTY_BIN" ]]; then
+    # Create symlink in node_modules/@opencode-ai/pty-linux-arm64-gnu/bin/ if missing
+    DEST_DIR="$SRC_DIR/node_modules/${pkg_name}-linux-arm64-gnu/bin"
+    if [[ ! -f "$DEST_DIR/opencode-pty" && -n "$PTY_BIN" ]]; then
+      mkdir -p "$DEST_DIR"
+      cp -p "$PTY_BIN" "$DEST_DIR/opencode-pty" 2>/dev/null || true
+    fi
+  fi
+done
+cd "$SRC_DIR/packages/cli"
+
 # ── 2. platform patch (idempotent) ─────────────────────────────────────
 CHUNK="$(ls -d "$STORE"/@opentui+core@*/ 2>/dev/null | head -n1 || true)"
 : "${CHUNK:?Error: @opentui+core store chunk not found — run 'bun install --force --ignore-scripts' in $SRC_DIR}"
