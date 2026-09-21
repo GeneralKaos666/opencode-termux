@@ -92,6 +92,18 @@ echo "    bun = $ANDROID_BUN"
 # ── 1. opentui bionic runtime check ────────────────────────────────────
 STORE="$SRC_DIR/node_modules/.bun"
 TUI_SO="$(ls "$STORE"/@opentui+core-linux-arm64@*/node_modules/@opentui/core-linux-arm64/libopentui.so 2>/dev/null | head -n1 || true)"
+# Auto-deploy bionic .so if missing from store
+if [[ -z "$TUI_SO" || ! -f "$TUI_SO" ]]; then
+  BUILTIN="$ROOT_DIR/artifacts/transplant/opentui-bionic/libopentui.so"
+  if [[ -f "$BUILTIN" ]]; then
+    STORE_DIR=$(ls -d "$STORE"/@opentui+core-linux-arm64@*/node_modules/@opentui/core-linux-arm64/ 2>/dev/null | head -n1)
+    if [[ -n "$STORE_DIR" ]]; then
+      cp -p "$BUILTIN" "$STORE_DIR/libopentui.so"
+      TUI_SO="$STORE_DIR/libopentui.so"
+      echo "    deployed bionic libopentui.so to store"
+    fi
+  fi
+fi
 NEEDED_SYMS=(cancelKittyImageTransport editBufferSetTabWidth getBufferWidthMethod \
   getKittyImageTransport imageCreateFromPixels imageUpdatePixels pollKittyImageTransport \
   processKittyImageReply setKittyImageTransport pthread_tryjoin_np)
