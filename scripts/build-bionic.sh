@@ -50,6 +50,33 @@ else
   done
 fi
 [[ -n "${SRC_DIR:-}" && -f "$SRC_DIR/packages/cli/script/build.ts" ]] || {
+  echo "==> v2 source tree not found for $VER, downloading from npm..." >&2
+  DL_DIR="${TMPDIR:-/data/data/com.termux/files/usr/tmp}/v2src"
+  mkdir -p "$DL_DIR"
+  TGZ="$DL_DIR/opencode-${VER}.tgz"
+  if [[ ! -f "$TGZ" ]]; then
+    npm pack "@opencode/cli@${VER}" --pack-destination "$DL_DIR" 2>/dev/null || \
+    npm pack "@opencode/cli-linux-arm64@${VER}" --pack-destination "$DL_DIR" 2>/dev/null || {
+      echo "Error: failed to download @opencode/cli@${VER} from npm" >&2
+      exit 1
+    }
+    TGZ="$(ls "$DL_DIR"/opencode-*${VER}*.tgz 2>/dev/null | head -1)"
+    [[ -f "$TGZ" ]] || { echo "Error: download succeeded but tgz not found in $DL_DIR" >&2; exit 1; }
+  fi
+  EXTRACT_DIR="$DL_DIR/opencode-${VER}"
+  if [[ ! -f "$EXTRACT_DIR/packages/cli/script/build.ts" ]]; then
+    mkdir -p "$EXTRACT_DIR"
+    tar xzf "$TGZ" -C "$EXTRACT_DIR" --strip-components=1 2>/dev/null || {
+      tar xzf "$TGZ" -C "$EXTRACT_DIR" 2>/dev/null
+      [[ -d "$EXTRACT_DIR/package" ]] && mv "$EXTRACT_DIR/package"/* "$EXTRACT_DIR/" 2>/dev/null
+    }
+  fi
+  [[ -f "$EXTRACT_DIR/packages/cli/script/build.ts" ]] || {
+    echo "Error: extracted tgz has no packages/cli/script/build.ts" >&2
+    exit 1
+  }
+  SRC_DIR="$EXTRACT_DIR"
+}
   echo "Error: v2 source tree not found (looked for packages/cli/script/build.ts); set V2_SRC=<root>" >&2
   exit 1
 }
