@@ -99,12 +99,12 @@ LD_PRELOAD="$OPENAT2_SHIM" "$ANDROID_BUN" install --force --ignore-scripts 2>&1 
 }
 cd "$ROOT_DIR"
 
-TUI_SO="$(ls "$STORE"/@opentui+core-linux-arm64@*/node_modules/@opentui/core-linux-arm64/libopentui.so 2>/dev/null | head -n1 || true)"
+TUI_SO="$(ls "$STORE"/@opentui+core-linux-arm64@*/node_modules/@opentui/core-linux-arm64/libopentui.so 2>/dev/null | head -n1 || ls "$STORE"/@opentui+core@*/node_modules/@opentui/core/libopentui.so 2>/dev/null | head -n1 || true)"
 # Auto-deploy bionic .so if missing from store
 if [[ -z "$TUI_SO" || ! -f "$TUI_SO" ]]; then
   BUILTIN="$ROOT_DIR/artifacts/transplant/opentui-bionic/libopentui.so"
   if [[ -f "$BUILTIN" ]]; then
-    STORE_DIR=$(ls -d "$STORE"/@opentui+core-linux-arm64@*/node_modules/@opentui/core-linux-arm64/ 2>/dev/null | head -n1)
+STORE_DIR=$(ls -d "$STORE"/@opentui+core-linux-arm64@*/node_modules/@opentui/core-linux-arm64/ 2>/dev/null | head -n1 || ls -d "$STORE"/@opentui+core@*/node_modules/@opentui/core/ 2>/dev/null | head -n1)
     if [[ -n "$STORE_DIR" ]]; then
       cp -p "$BUILTIN" "$STORE_DIR/libopentui.so"
       TUI_SO="$STORE_DIR/libopentui.so"
