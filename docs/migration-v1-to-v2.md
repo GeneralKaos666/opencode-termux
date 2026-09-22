@@ -110,3 +110,12 @@ opencode (v2 native B线) ←→ opencode-wrapper (glibc)
 - `dual-track-install.md` — 双轨安装说明
 - `13-opencode-runtime-build.md` — 运行时构建路径
 - `20-packaging-deb.md` / `21-packaging-pkg-tar-xz.md` — 打包布局
+
+## 打包说明（本地）
+
+- deb：`make deb-native VER=<x>`（或 `make family-v2-native VER=<x> PKG=deb`）
+- pacman：**可选**。缺少 `makepkg` 时自动跳过并打印 WARN，不视为失败；显式 `make pacman-native` 同样跳过。
+- B 线产物位于 `artifacts/build/<ver>/opencode-native-revived`；`deb-native`/`pacman-native` 会自动探测该目录。
+- 直接调用脚本请用环境变量 `VERSION=<x>`（不是 `VER=`）。
+- 构建期硬校验：产物内嵌的 `libopentui.so` 必须为 bionic（NEEDED `libm.so`，非 `libm.so.6`），否则构建失败（见 `docs/tui-common-fix.md`）。
+- seccomp 加固：`make seccomp-harden VER=<x>` 会自动定位 B 线产物（`artifacts/build/<x>/opencode-native-revived`）。加固后二进制 `DT_NEEDED[0]=libopencode-crhandler.so`，运行需 shim 位于 `$ORIGIN/../lib/opencode/`（deb/pacman 包已自动安装到 `$PREFIX/lib/opencode/`）。

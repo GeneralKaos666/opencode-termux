@@ -10,6 +10,8 @@ PACKAGER_NAME ?= Hope2333(幽零小喵) <u0catmiao@proton.me>
 MORE ?=
 ODIR ?=
 MIX ?= 0
+# Pacman packaging is optional: skip (WARN) when makepkg is absent.
+HAVE_MAKEPKG := $(shell command -v makepkg >/dev/null 2>&1 && echo 1 || echo 0)
 
 # Release upload target variables
 TAG ?= Push$(shell date +%y%m%d)
@@ -92,9 +94,10 @@ all: clean runtime stage
 	if [ "$(PKG)" = "deb" ]; then \
 		$(MAKE) deb VERSION=$$V; \
 	elif [ "$(PKG)" = "pacman" ]; then \
-		$(MAKE) pacman VERSION=$$V; \
+		if [ "$(HAVE_MAKEPKG)" = "1" ]; then $(MAKE) pacman VERSION=$$V; else echo "WARN: makepkg not found; skipping pacman packaging"; fi; \
 	else \
-		$(MAKE) deb VERSION=$$V && $(MAKE) pacman VERSION=$$V; \
+		$(MAKE) deb VERSION=$$V; \
+		if [ "$(HAVE_MAKEPKG)" = "1" ]; then $(MAKE) pacman VERSION=$$V; else echo "WARN: makepkg not found; skipping pacman packaging"; fi; \
 	fi
 
 
@@ -184,7 +187,9 @@ deb-native:
 		exit 1; \
 	fi
 	rm -rf packing/dpkg-native/work
-	MAINTAINER='$(PACKAGER_NAME)' VERSION='$(VER)' ./scripts/package/package_deb_native.sh
+	@ROOT="$(TRANSPLANT_ROOT)"; \
+	if [ -z "$$ROOT" ] && [ -d "$(CURDIR)/artifacts/build/$(VER)" ]; then ROOT="$(CURDIR)/artifacts/build"; fi; \
+	TRANSPLANT_ROOT="$$ROOT" MAINTAINER='$(PACKAGER_NAME)' VERSION='$(VER)' ./scripts/package/package_deb_native.sh
 	@if [ "$(OUTPUT_ROOT)" != "$(CURDIR)/packing" ]; then \
 		if [ "$(MIX)" = "1" ]; then \
 			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/dpkg-native/opencode_[0-9]*.deb "$(OUTPUT_ROOT)/"; \
@@ -199,7 +204,9 @@ pacman-native:
 		exit 1; \
 	fi
 	rm -rf packing/pacman/pkg packing/pacman/src
-	PACKAGER_NAME='$(PACKAGER_NAME)' VERSION='$(VER)' ./scripts/package/package_pacman_native.sh
+	@ROOT="$(TRANSPLANT_ROOT)"; \
+	if [ -z "$$ROOT" ] && [ -d "$(CURDIR)/artifacts/build/$(VER)" ]; then ROOT="$(CURDIR)/artifacts/build"; fi; \
+	TRANSPLANT_ROOT="$$ROOT" PACKAGER_NAME='$(PACKAGER_NAME)' VERSION='$(VER)' ./scripts/package/package_pacman_native.sh
 	@if [ "$(OUTPUT_ROOT)" != "$(CURDIR)/packing" ]; then \
 		if [ "$(MIX)" = "1" ]; then \
 			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/pacman/opencode-[0-9]*.pkg.* "$(OUTPUT_ROOT)/"; \
@@ -269,11 +276,16 @@ transplant:
 # symbol-range guard scan + dlopen hostile-FFI harness -> install to slot.
 # LIBOPENTUI_OPTIONAL=1 downgrades a build failure to a WARN (quarantine path
 # for toolchain-less environments); default is loud.
+# The v2 B-line builds against the OpenTUI fork work tree (packages/native);
+# override LIBOPENTUI_ZIG_DIR / ZIG_BIN for other trees.
+LIBOPENTUI_ZIG_DIR ?= $(HOME)/opentui/.work/opentui/packages/native
+LIBOPENTUI_ZIG_BIN ?= $(HOME)/zig-aarch64-linux-0.16.0/zig
 libopentui:
 	@if [ -f artifacts/transplant/opentui-bionic/libopentui.so ] && \
 	    bash tools/transplant/build-libopentui.sh --check artifacts/transplant/opentui-bionic/libopentui.so; then \
 		echo "==> libopentui: guard-verified .so present"; \
-	elif bash tools/transplant/build-libopentui.sh; then \
+	elif OPENTUI_ZIG_DIR="$(LIBOPENTUI_ZIG_DIR)" ZIG_BIN="$(LIBOPENTUI_ZIG_BIN)" \
+	    bash tools/transplant/build-libopentui.sh; then \
 		echo "==> libopentui: built + guard-verified via common layer"; \
 	elif [ "$(LIBOPENTUI_OPTIONAL)" = "1" ]; then \
 		echo "WARN: libopentui build failed -> transplant will quarantine (tui:absent)"; \
@@ -349,6 +361,9 @@ transplant-upx: UPX_OPTS?= --best
 # toolchain is missing; idempotent (already-hardened products are detected).
 # Runs automatically inside `transplant` after the TUI swap; MUST run BEFORE
 # transplant-upx (upx packing hides the dynamic section).
+# Product resolution: $(NATIVE_DIR) (A-line transplant) when it holds a product,
+# else auto-detects the v2 B-line product at artifacts/build/<ver>/ so
+# `make seccomp-harden VER=<x>` works for both lines.
 seccomp-harden:
 	@if [ -z "$(VER)" ]; then \
 		echo "Error: VER is empty. Example: make seccomp-harden VER=1.18.21"; \
@@ -362,32 +377,33 @@ seccomp-harden:
 		echo "WARN: tools/shim/sigsys_handler.c or tools/transplant/crhandler_patch.py missing; skipping seccomp hardening"; \
 		exit 0; \
 	fi
-	@SRC="$(SRC)"; \
+	@SRC="$(SRC)"; DIR="$(NATIVE_DIR)"; \
+	if [ -z "$$SRC" ] && [ ! -f "$$DIR/opencode-native-tui" ] && [ ! -f "$$DIR/opencode-native-revived" ] \
+	    && [ -f "$(CURDIR)/artifacts/build/$(NATIVE_VER)/opencode-native-revived" ]; then \
+		DIR="$(CURDIR)/artifacts/build/$(NATIVE_VER)"; \
+	fi; \
 	if [ -z "$$SRC" ]; then \
-		if [ -f $(NATIVE_DIR)/opencode-native-tui ]; then SRC=$(NATIVE_DIR)/opencode-native-tui; \
-		elif [ -f $(NATIVE_DIR)/opencode-native-revived ]; then SRC=$(NATIVE_DIR)/opencode-native-revived; \
-		elif [ -f $(NATIVE_DIR)/opencode-native ]; then SRC=$(NATIVE_DIR)/opencode-native; \
+		if [ -f "$$DIR/opencode-native-tui" ]; then SRC="$$DIR/opencode-native-tui"; \
+		elif [ -f "$$DIR/opencode-native-revived" ]; then SRC="$$DIR/opencode-native-revived"; \
+		elif [ -f "$$DIR/opencode-native" ]; then SRC="$$DIR/opencode-native"; \
 		else \
-			echo "WARN: no revived product in $(NATIVE_DIR); skipping seccomp hardening"; \
+			echo "WARN: no revived product in $$DIR; skipping seccomp hardening"; \
 			exit 0; \
 		fi; \
 	fi; \
 	echo "==> seccomp-harden VER=$(VER) source=$$SRC"; \
-	clang -shared -fPIC -O2 -o $(NATIVE_DIR)/libopencode-crhandler.so tools/shim/sigsys_handler.c || exit 1; \
+	clang -shared -fPIC -O2 -o "$$DIR/libopencode-crhandler.so" tools/shim/sigsys_handler.c || exit 1; \
 	if grep -aqF libopencode-crhandler.so "$$SRC"; then \
 		echo "==> seccomp-harden: $$SRC already hardened, skip (shim rebuilt)"; \
 		exit 0; \
 	fi; \
 	cp -p "$$SRC" "$$SRC.pre-crhandler" || exit 1; \
 	python3 tools/transplant/crhandler_patch.py "$$SRC" || exit 1; \
-	echo "seccomp-harden: pre-patch copy kept at $$SRC.pre-crhandler";
-	@# Post-patch sync: when tui was patched, ensure revived reflects the
-	@# hardened binary. transplant.py produces both tui and revived, but
-	@# seccomp-harden patches only the preferred source (typically tui).
-	if [ "$$SRC" = "$(NATIVE_DIR)/opencode-native-tui" ] && [ -f "$(NATIVE_DIR)/opencode-native-revived" ]; then \
-		if ! grep -aqF libopencode-crhandler.so "$(NATIVE_DIR)/opencode-native-revived"; then \
-			rm -f "$(NATIVE_DIR)/opencode-native-revived"; \
-			cp -p "$(NATIVE_DIR)/opencode-native-tui" "$(NATIVE_DIR)/opencode-native-revived"; \
+	echo "seccomp-harden: pre-patch copy kept at $$SRC.pre-crhandler"; \
+	if [ "$$SRC" = "$$DIR/opencode-native-tui" ] && [ -f "$$DIR/opencode-native-revived" ]; then \
+		if ! grep -aqF libopencode-crhandler.so "$$DIR/opencode-native-revived"; then \
+			rm -f "$$DIR/opencode-native-revived"; \
+			cp -p "$$DIR/opencode-native-tui" "$$DIR/opencode-native-revived"; \
 			echo "seccomp-harden: synced hardened tui -> revived"; \
 		fi; \
 	fi
@@ -407,9 +423,10 @@ family-wrapper: runtime stage
 	@if [ "$(PKG)" = "deb" ]; then \
 		$(MAKE) deb VER=$(VER); \
 	elif [ "$(PKG)" = "pacman" ]; then \
-		$(MAKE) pacman VER=$(VER); \
+		if [ "$(HAVE_MAKEPKG)" = "1" ]; then $(MAKE) pacman VER=$(VER); else echo "WARN: makepkg not found; skipping pacman packaging"; fi; \
 	else \
-		$(MAKE) deb VER=$(VER) && $(MAKE) pacman VER=$(VER); \
+		$(MAKE) deb VER=$(VER); \
+		if [ "$(HAVE_MAKEPKG)" = "1" ]; then $(MAKE) pacman VER=$(VER); else echo "WARN: makepkg not found; skipping pacman packaging"; fi; \
 	fi
 
 # family-native: transplant + seccomp-harden + native packages for a single version
@@ -420,7 +437,8 @@ family-native:
 		exit 1; \
 	fi
 	$(MAKE) transplant VER=$(VER)
-	$(MAKE) deb-native VER=$(VER) && $(MAKE) pacman-native VER=$(VER)
+	$(MAKE) deb-native VER=$(VER)
+	@if [ "$(HAVE_MAKEPKG)" = "1" ]; then $(MAKE) pacman-native VER=$(VER); else echo "WARN: makepkg not found; skipping pacman packaging"; fi
 
 # family-compressed: UPX-compressed variant (local build)
 # Usage: make family-compressed VER=1.18.21
@@ -431,7 +449,8 @@ family-compressed:
 	fi
 	$(MAKE) transplant VER=$(VER)
 	$(MAKE) transplant-upx VER=$(VER)
-	$(MAKE) deb-compressed VER=$(VER) && $(MAKE) pacman-compressed VER=$(VER)
+	$(MAKE) deb-compressed VER=$(VER)
+	@if [ "$(HAVE_MAKEPKG)" = "1" ]; then $(MAKE) pacman-compressed VER=$(VER); else echo "WARN: makepkg not found; skipping pacman packaging"; fi
 
 # family: array dispatcher over the three family chains (FEATURE: family as ARRAY)
 # Usage: make family=wrapper,native,compressed VER=1.18.21   (comma or space separated)
@@ -760,7 +779,11 @@ family-v2-native:
 	fi
 	$(MAKE) --no-print-directory build-native VER=$(VER) V2_SRC='$(V2_SRC)'
 	TRANSPLANT_ROOT=$(CURDIR)/artifacts/build $(MAKE) --no-print-directory deb-native VER=$(VER)
-	TRANSPLANT_ROOT=$(CURDIR)/artifacts/build $(MAKE) --no-print-directory pacman-native VER=$(VER)
+	@if [ "$(HAVE_MAKEPKG)" = "1" ]; then \
+		TRANSPLANT_ROOT=$(CURDIR)/artifacts/build $(MAKE) --no-print-directory pacman-native VER=$(VER); \
+	else \
+		echo "WARN: makepkg not found; skipping pacman-native (deb built)"; \
+	fi
 
 # family-v2-compressed: B-line + UPX + compressed deb/pacman (v1 standalone scheme)
 # Usage: make family-v2-compressed VER=2.0.0
@@ -774,7 +797,11 @@ family-v2-compressed:
 	$(MAKE) --no-print-directory harden-native VER=$(VER)
 	$(MAKE) --no-print-directory build-native-upx VER=$(VER)
 	TRANSPLANT_ROOT=$(CURDIR)/artifacts/build OPENCODE_COMPRESSED_BIN=$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived-upx OPENCODE_CRHANDLER_SO=$(CURDIR)/artifacts/build/$(VER)/libopencode-crhandler.so $(MAKE) --no-print-directory deb-compressed VER=$(VER)
-	TRANSPLANT_ROOT=$(CURDIR)/artifacts/build OPENCODE_COMPRESSED_BIN=$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived-upx OPENCODE_CRHANDLER_SO=$(CURDIR)/artifacts/build/$(VER)/libopencode-crhandler.so $(MAKE) --no-print-directory pacman-compressed VER=$(VER)
+	@if [ "$(HAVE_MAKEPKG)" = "1" ]; then \
+		TRANSPLANT_ROOT=$(CURDIR)/artifacts/build OPENCODE_COMPRESSED_BIN=$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived-upx OPENCODE_CRHANDLER_SO=$(CURDIR)/artifacts/build/$(VER)/libopencode-crhandler.so $(MAKE) --no-print-directory pacman-compressed VER=$(VER); \
+	else \
+		echo "WARN: makepkg not found; skipping pacman-compressed (deb built)"; \
+	fi
 
 # harden-native: seccomp-harden the B-line product (v1 crhandler zero-displacement
 # patch chain): compile tools/shim/sigsys_handler.c into artifacts/build/<ver>/,

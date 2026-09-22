@@ -10,6 +10,11 @@ STAGED_PREFIX="${STAGED_PREFIX:-$ROOT_DIR/artifacts/staged/prefix-standalone}"
 PACKAGER_NAME="${PACKAGER_NAME:-Hope2333(幽零小喵) <u0catmiao@proton.me>}"
 PKGREL="${PKGREL:-1}"
 
+command -v makepkg >/dev/null 2>&1 || {
+	echo "WARN: makepkg not found; skipping pacman packaging" >&2
+	exit 0
+}
+
 # Standalone staged prefix must use the independent lib prefix.
 [[ -x "$STAGED_PREFIX/lib/opencode-wrapper/runtime/opencode" ]] || {
 	echo "Error: missing OpenCode standalone runtime" >&2
@@ -56,11 +61,11 @@ echo "Pacman package created under: $ROOT_DIR/packing/pacman"
 # --- Regression guard: reject packages with data/ payload paths (double-prefix bug) ---
 BUILT_PKG=$(ls "$ROOT_DIR/packing/pacman/"*-standalone-* 2>/dev/null || ls "$ROOT_DIR/packing/pacman/"*-compressed-* 2>/dev/null || true)
 if [[ -n "$BUILT_PKG" ]]; then
-    DATA_PAYLOAD=$(bsdtar -tf "$BUILT_PKG" | grep -E '^data/.*/(bin|lib)/' | head -1 || true)
-    if [[ -n "$DATA_PAYLOAD" ]]; then
-        echo "FATAL: regression guard triggered — found data/ payload path: $DATA_PAYLOAD" >&2
-        echo "Ensure PKGBUILD stages to \$pkgdir/usr/ (relative), not \$pkgdir\$prefix." >&2
-        exit 1
-    fi
-    echo "Regression guard: OK (no data/ payload paths)"
+	DATA_PAYLOAD=$(bsdtar -tf "$BUILT_PKG" | grep -E '^data/.*/(bin|lib)/' | head -1 || true)
+	if [[ -n "$DATA_PAYLOAD" ]]; then
+		echo "FATAL: regression guard triggered — found data/ payload path: $DATA_PAYLOAD" >&2
+		echo "Ensure PKGBUILD stages to \$pkgdir/usr/ (relative), not \$pkgdir\$prefix." >&2
+		exit 1
+	fi
+	echo "Regression guard: OK (no data/ payload paths)"
 fi

@@ -82,3 +82,5 @@ make matrix VERS='1.2.9 1.2.10' TARGET_HOST=192.168.1.22 TARGET_USER=u0_a258
 ## NOTES
 - `packing/` (default outputs) and `packing/` (templates/manifests) are different; keep them conceptually separate.
 - When adding new workflow-critical scripts, update both `docs/README.md` navigation and this root map.
+- Pacman packaging is optional: scripts and the Makefile auto-skip with a WARN when `makepkg` is absent (deb is the local default). See `scripts/package/package_pacman*.sh`.
+- `make build-native` hard-fails if the product would embed a glibc `libopentui.so` (pre- and post-compile assertions in `scripts/build-bionic.sh`); the bionic `.so` is deployed to every `node_modules` copy before compile.
