@@ -30,8 +30,8 @@ fi
 cd "$ROOT_DIR/packing/pacman"
 rm -rf "$ROOT_DIR/packing/pacman/pkg" "$ROOT_DIR/packing/pacman/src"
 
-TMP_MAKEPKG_CONF="$ROOT_DIR/packing/pacman/.makepkg-opencode-wrapper.conf"
-TMP_PKGBUILD="$ROOT_DIR/packing/pacman/.PKGBUILD.opencode-wrapper.tmp"
+TMP_MAKEPKG_CONF="$ROOT_DIR/packing/pacman/.makepkg-opencode1-wrapper.conf"
+TMP_PKGBUILD="$ROOT_DIR/packing/pacman/.PKGBUILD.opencode1-wrapper.tmp"
 cleanup() {
 	rm -f "$TMP_MAKEPKG_CONF" "$TMP_PKGBUILD"
 }
@@ -55,7 +55,7 @@ STAGED_PREFIX="$STAGED_PREFIX" REPO_ROOT="$ROOT_DIR" makepkg --config "$TMP_MAKE
 echo "Pacman package created under: $ROOT_DIR/packing/pacman"
 
 # --- Regression guard: reject packages with data/ payload paths (double-prefix bug) ---
-BUILT_PKG=$(ls "$ROOT_DIR/packing/pacman/opencode-wrapper-${VERSION}-${PKGREL}-aarch64.pkg.tar.xz" 2>/dev/null || true)
+BUILT_PKG=$(ls "$ROOT_DIR/packing/pacman/opencode1-wrapper-${VERSION}-${PKGREL}-aarch64.pkg.tar.xz" 2>/dev/null || true)
 if [[ -n "$BUILT_PKG" ]]; then
     DATA_PAYLOAD=$(bsdtar -tf "$BUILT_PKG" | grep -E '^data/' | head -1 || true)
     if [[ -n "$DATA_PAYLOAD" ]]; then

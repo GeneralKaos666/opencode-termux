@@ -55,7 +55,7 @@ COMPRESSED_BIN="${OPENCODE_COMPRESSED_BIN:-$TRANSPLANT_ROOT/$VERSION/opencode-na
 
 DEB_ROOT="$ROOT_DIR/packing/dpkg-compressed/work"
 OUT_DIR="$ROOT_DIR/packing/dpkg-compressed"
-OUT_FILE="$OUT_DIR/opencode-compressed_${VERSION}_${ARCH_DEB}.deb"
+OUT_FILE="$OUT_DIR/opencode1-compressed_${VERSION}_${ARCH_DEB}.deb"
 
 rm -rf "$DEB_ROOT"
 mkdir -p "$DEB_ROOT/DEBIAN" "$DEB_ROOT$PREFIX/bin" "$OUT_DIR"
@@ -77,7 +77,7 @@ install -D -m755 "$SHIM_SO" "$DEB_ROOT$PREFIX/lib/opencode/libopencode-crhandler
 # Field order matters (B1 lesson): Conflicts MUST precede Description or it
 # gets swallowed into the description text (illegal field order).
 cat >"$DEB_ROOT/DEBIAN/control" <<EOF
-Package: opencode-compressed
+Package: opencode1-compressed
 Version: $VERSION
 Section: utils
 Priority: optional

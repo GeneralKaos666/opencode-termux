@@ -52,9 +52,15 @@ NATIVE_BIN="$TRANSPLANT_ROOT/$VERSION/opencode-native-tui"
 	exit 1
 }
 
+# v1 (1.x) packages are renamed opencode1 (coexist with v2); v2 keeps `opencode`.
+case "$VERSION" in
+	1.*) PKG_NAME="opencode1" ;;
+	*)   PKG_NAME="opencode" ;;
+esac
+
 DEB_ROOT="$ROOT_DIR/packing/dpkg-native/work"
 OUT_DIR="$ROOT_DIR/packing/dpkg-native"
-OUT_FILE="$OUT_DIR/opencode_${VERSION}_${ARCH_DEB}.deb"
+OUT_FILE="$OUT_DIR/${PKG_NAME}_${VERSION}_${ARCH_DEB}.deb"
 
 rm -rf "$DEB_ROOT"
 mkdir -p "$DEB_ROOT/DEBIAN" "$DEB_ROOT$PREFIX/bin" "$OUT_DIR"
@@ -80,7 +86,7 @@ else
 fi
 
 cat >"$DEB_ROOT/DEBIAN/control" <<EOF
-Package: opencode
+Package: $PKG_NAME
 Version: $VERSION
 Architecture: $ARCH_DEB
 Maintainer: $MAINTAINER

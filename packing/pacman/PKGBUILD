@@ -1,13 +1,13 @@
-pkgname=opencode-wrapper
+pkgname=opencode1-wrapper
 pkgver=1.2.10
 pkgrel=1
-pkgdesc='OpenCode for Termux from local staged prefix'
+pkgdesc='OpenCode for Termux from local staged prefix (v1 wrapper appendix; renamed opencode1-wrapper)'
 arch=('aarch64')
 url='https://github.com/anomalyco/opencode'
 license=('MIT')
 options=('!strip' '!debug' '!emptydirs')
-replaces=('opencode-glibc')
-conflicts=('opencode' 'opencode-compressed')
+replaces=('opencode1-glibc')
+conflicts=('opencode' 'opencode1-compressed')
 
 makedepends=()
 source=()

@@ -66,7 +66,11 @@ LOG_PATH = (os.path.join(REPO_ROOT, ".omo", "evidence",
 
 RELEASE_TAG = "Push260903"
 ASSET_TMPL = "opencode-native-{ver}-upx.xz"
-PKG_TMPL = "opencode-{ver}-1-aarch64.pkg.tar.xz"
+def pkg_tmpl(ver):
+    # v1 (1.x) renamed opencode1; v2 keeps opencode.
+    return ("opencode1-{ver}-1-aarch64.pkg.tar.xz" if ver.startswith("1.")
+            else "opencode-{ver}-1-aarch64.pkg.tar.xz")
+PKG_TMPL = pkg_tmpl  # callable: PKG_TMPL(ver)
 
 _DEFAULT_NODES = {              # None = 本机
     "local":  None,
@@ -1015,7 +1019,7 @@ def discover_release(tag, repo):
         print(f"release {tag} 无资产或不可达: {r.stderr.strip()[:200]}")
         sys.exit(1)
     vers, pre = {}, []
-    pkg_re = re.compile(r"^opencode-([\d.]+)-1-aarch64\.pkg\.tar\.xz$")
+    pkg_re = re.compile(r"^(?:opencode|opencode1)-([\d.]+)-1-aarch64\.pkg\.tar\.xz$")
     for name, size in assets.items():
         m = pkg_re.match(name)
         if m:
@@ -1049,7 +1053,7 @@ def discover_release(tag, repo):
 def discover(include_artifacts):
     vers = {}
     for fn in sorted(os.listdir(PKG_DIR)) if os.path.isdir(PKG_DIR) else []:
-        m = re.match(r"^opencode-([\d.]+)-1-aarch64\.pkg\.tar\.xz$", fn)
+        m = re.match(r"^(?:opencode|opencode1)-([\d.]+)-1-aarch64\.pkg\.tar\.xz$", fn)
         if m:
             v = m.group(1)
             vers[v] = Ver(v, os.path.join(PKG_DIR, fn), ASSET_TMPL.format(ver=v))
@@ -1065,7 +1069,7 @@ def discover(include_artifacts):
 def _seed(hostspec):
     """手机侧: 把全部包 + 本脚本投送到目标机 ~/opc-fleet/, 逐文件自建进度条"""
     pkgs = [f for f in sorted(os.listdir(PKG_DIR))
-            if re.match(r"^opencode-[\d.]+-1-aarch64\.pkg\.tar\.xz$", f)] \
+            if re.match(r"^(?:opencode|opencode1)-[\d.]+-1-aarch64\.pkg\.tar\.xz$", f)] \
         if os.path.isdir(PKG_DIR) else []
     if not pkgs:
         print(f"包源目录无匹配: {PKG_DIR}"); return 1
@@ -1311,7 +1315,7 @@ def main():
         f.vers, f.assets = discover_release(o.tag, f.repo)
         _cache_hits = 0
         for v in f.vers.values():
-            _name = PKG_TMPL.format(ver=v.ver)
+            _name = PKG_TMPL(v.ver)
             _local_pkg = os.path.join(PKG_DIR, _name)
             _inbox_pkg = os.path.join(INBOX, _name)
             if os.path.isfile(_local_pkg) and _local_pkg != _inbox_pkg:
@@ -1352,7 +1356,7 @@ def main():
             elif o.source == "release":
                 print(f"  {v.ver:8} ← release/{mib(v.src_size):8} → {v.asset}")
             elif o.source == "auto":
-                _name = PKG_TMPL.format(ver=v.ver)
+                _name = PKG_TMPL(v.ver)
                 _local = os.path.join(PKG_DIR, _name)
                 _inbox = os.path.join(INBOX, _name)
                 if v.pkg and os.path.isfile(v.pkg):

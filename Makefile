@@ -158,9 +158,9 @@ deb:
 	MAINTAINER='$(PACKAGER_NAME)' ./scripts/package/package_deb.sh
 	@if [ "$(OUTPUT_ROOT)" != "$(CURDIR)/packing" ]; then \
 		if [ "$(MIX)" = "1" ]; then \
-			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/dpkg/opencode-wrapper_$(VER)_aarch64.deb "$(OUTPUT_ROOT)/"; \
+			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/dpkg/opencode1-wrapper_$(VER)_aarch64.deb "$(OUTPUT_ROOT)/"; \
 		else \
-			mkdir -p "$(OUTPUT_ROOT)/deb" && cp -f packing/dpkg/opencode-wrapper_$(VER)_aarch64.deb "$(OUTPUT_ROOT)/deb/"; \
+			mkdir -p "$(OUTPUT_ROOT)/deb" && cp -f packing/dpkg/opencode1-wrapper_$(VER)_aarch64.deb "$(OUTPUT_ROOT)/deb/"; \
 		fi; \
 	fi
 
@@ -169,9 +169,9 @@ pacman:
 	PACKAGER_NAME='$(PACKAGER_NAME)' ./scripts/package/package_pacman.sh
 	@if [ "$(OUTPUT_ROOT)" != "$(CURDIR)/packing" ]; then \
 		if [ "$(MIX)" = "1" ]; then \
-			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/pacman/opencode-wrapper-$(VER)-*.pkg.* "$(OUTPUT_ROOT)/"; \
+			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/pacman/opencode1-wrapper-$(VER)-*.pkg.* "$(OUTPUT_ROOT)/"; \
 		else \
-			mkdir -p "$(OUTPUT_ROOT)/pacman" && cp -f packing/pacman/opencode-wrapper-$(VER)-*.pkg.* "$(OUTPUT_ROOT)/pacman/"; \
+			mkdir -p "$(OUTPUT_ROOT)/pacman" && cp -f packing/pacman/opencode1-wrapper-$(VER)-*.pkg.* "$(OUTPUT_ROOT)/pacman/"; \
 		fi; \
 	fi
 
@@ -187,9 +187,9 @@ deb-native:
 	MAINTAINER='$(PACKAGER_NAME)' VERSION='$(VER)' ./scripts/package/package_deb_native.sh
 	@if [ "$(OUTPUT_ROOT)" != "$(CURDIR)/packing" ]; then \
 		if [ "$(MIX)" = "1" ]; then \
-			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/dpkg-native/opencode_[0-9]*.deb "$(OUTPUT_ROOT)/"; \
+			mkdir -p "$(OUTPUT_ROOT)" && cp -f $$(case $(VER) in 1.*) echo opencode1;; *) echo opencode;; esac)_$(VER)_aarch64.deb "$(OUTPUT_ROOT)/"; \
 		else \
-			mkdir -p "$(OUTPUT_ROOT)/deb" && cp -f packing/dpkg-native/opencode_[0-9]*.deb "$(OUTPUT_ROOT)/deb/"; \
+			mkdir -p "$(OUTPUT_ROOT)/deb" && cp -f $$(case $(VER) in 1.*) echo opencode1;; *) echo opencode;; esac)_$(VER)_aarch64.deb "$(OUTPUT_ROOT)/deb/"; \
 		fi; \
 	fi
 
@@ -202,9 +202,9 @@ pacman-native:
 	PACKAGER_NAME='$(PACKAGER_NAME)' VERSION='$(VER)' ./scripts/package/package_pacman_native.sh
 	@if [ "$(OUTPUT_ROOT)" != "$(CURDIR)/packing" ]; then \
 		if [ "$(MIX)" = "1" ]; then \
-			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/pacman/opencode-[0-9]*.pkg.* "$(OUTPUT_ROOT)/"; \
+			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/pacman/$$(case $(VER) in 1.*) echo opencode1;; *) echo opencode;; esac)-$(VER)-*.pkg.* "$(OUTPUT_ROOT)/"; \
 		else \
-			mkdir -p "$(OUTPUT_ROOT)/pacman" && cp -f packing/pacman/opencode-[0-9]*.pkg.* "$(OUTPUT_ROOT)/pacman/"; \
+			mkdir -p "$(OUTPUT_ROOT)/pacman" && cp -f packing/pacman/$$(case $(VER) in 1.*) echo opencode1;; *) echo opencode;; esac)-$(VER)-*.pkg.* "$(OUTPUT_ROOT)/pacman/"; \
 		fi; \
 	fi
 
@@ -648,6 +648,7 @@ release-upload:
 		exit 1; \
 	fi
 	@if [ "$(NATIVE)" = "1" ] || [ "$(NATIVE)" = "STABLE" ]; then \
+		case "$(NATIVE_VER)" in 1.*) np=opencode1;; *) np=opencode;; esac; \
 		if [ ! -f "$(NATIVE_DIR)/opencode-native-revived" ] || [ -z "$$(ls -A $(NATIVE_DIR) 2>/dev/null)" ]; then \
 			echo "Error: NATIVE=$(NATIVE) but $(NATIVE_DIR) is missing or empty (anti-empty-release)" >&2; \
 			exit 1; \
@@ -663,15 +664,16 @@ release-upload:
 	if ! gh release view "$(TAG)" --repo "$(REPO)" >/dev/null 2>&1; then \
 		echo "Creating release $(TAG)..."; \
 		if [ "$(NATIVE)" = "STABLE" ]; then \
-			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "OpenCode for Termux. Mainline (stable since 27/28): native bionic line - opencode-<ver>-aarch64-android-native / opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* - zero-wrapper, full TUI, Android API>=28. Appendix (legacy): wrapper packages opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.*." 2>&1 || exit 1; \
+		case "$(NATIVE_VER)" in 1.*) np=opencode1;; *) np=opencode;; esac; \
+			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "OpenCode for Termux. Mainline (stable since 27/28): native bionic line - opencode-<ver>-aarch64-android-native / opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* - zero-wrapper, full TUI, Android API>=28. Appendix (legacy): wrapper packages opencode1-wrapper_<ver>_aarch64.deb / opencode1-wrapper-<ver>-aarch64.pkg.tar.*." 2>&1 || exit 1; \
 		else \
-			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "Dual-track OpenCode for Termux. Track 1 (wrapper appendix, renamed opencode-wrapper): wrapper packages opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.* - full TUI. Track 2 (native, stable mainline since 27/28): opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* / *-android-native assets - zero-wrapper, full TUI (bionic libopentui.so, W10a 5/5), Android API>=28." 2>&1 || exit 1; \
+			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "Dual-track OpenCode for Termux. Track 1 (wrapper appendix, renamed opencode-wrapper): wrapper packages opencode1-wrapper_<ver>_aarch64.deb / opencode1-wrapper-<ver>-aarch64.pkg.tar.* - full TUI. Track 2 (native): v1=opencode1_<ver>_aarch64.deb / opencode1-<ver>-*-aarch64.pkg.* ; v2=opencode_* / opencode-<ver>-* / *-android-native assets - zero-wrapper, full TUI (bionic libopentui.so, W10a 5/5), Android API>=28." 2>&1 || exit 1; \
 		fi; \
 	else \
 		echo "Release $(TAG) exists; rebinding tag to HEAD via gh api (HTTPS, SSH 22 blocked)..."; \
 		gh api -X PATCH "repos/$(REPO)/git/refs/tags/$(TAG)" -f sha="$$(git rev-parse HEAD)" >/dev/null 2>&1 || echo "  (tag rebind skipped: API refused or already current)"; \
 	fi; \
-	for f in $(RELEASE_DIR)/opencode-wrapper_*.deb $(RELEASE_DIR)/opencode-wrapper-*.pkg.*; do \
+	for f in $(RELEASE_DIR)/opencode1-wrapper_*.deb $(RELEASE_DIR)/opencode1-wrapper-*.pkg.*; do \
 		if [ -f "$$f" ]; then \
 			echo "  uploading $$(basename $$f)..."; \
 			if ! gh release upload "$(TAG)" "$$f" --repo "$(REPO)" --clobber 2>&1; then upload_failed=1; fi; \
@@ -679,18 +681,19 @@ release-upload:
 	done; \
 	mkdir -p "$(RELEASE_DIR)"; \
 	echo "--- Dual-track asset naming ---"; \
-	echo "    wrapper line (appendix, renamed opencode-wrapper): opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.*"; \
-	echo "    native line (stable mainline since 27/28): opencode-<ver>-aarch64-android-native / opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* / opencode-<ver>-report.json / opencode-<ver>-watcher.tar.gz"; \
+	echo "    wrapper line (appendix, renamed opencode1-wrapper): opencode1-wrapper_<ver>_aarch64.deb / opencode1-wrapper-<ver>-aarch64.pkg.tar.*"; \
+	echo "    native line: v1=opencode1-<ver>* / v2=opencode-<ver>* (pkg+native-ELF+report+watcher); UPX asset stays opencode-native-<ver>-upx.xz"; \
 	if [ "$(NATIVE)" = "1" ] || [ "$(NATIVE)" = "STABLE" ]; then \
-		cp "$(NATIVE_DIR)/opencode-native-revived" "$(RELEASE_DIR)/opencode-$(NATIVE_VER)-aarch64-android-native"; \
-		cp "$(NATIVE_DIR)/report.json" "$(RELEASE_DIR)/opencode-$(NATIVE_VER)-report.json"; \
-		tar czf "$(RELEASE_DIR)/opencode-$(NATIVE_VER)-watcher.tar.gz" -C tools/watcher watcher shim.js install.sh; \
+		case "$(NATIVE_VER)" in 1.*) np=opencode1;; *) np=opencode;; esac; \
+		cp "$(NATIVE_DIR)/opencode-native-revived" "$(RELEASE_DIR)/$$np-$(NATIVE_VER)-aarch64-android-native"; \
+		cp "$(NATIVE_DIR)/report.json" "$(RELEASE_DIR)/$$np-$(NATIVE_VER)-report.json"; \
+		tar czf "$(RELEASE_DIR)/$$np-$(NATIVE_VER)-watcher.tar.gz" -C tools/watcher watcher shim.js install.sh; \
 		echo "=== Building native provider packages (opencode) ==="; \
 		MAINTAINER='$(PACKAGER_NAME)' VERSION='$(NATIVE_VER)' ./scripts/package/package_deb_native.sh; \
 		PACKAGER_NAME='$(PACKAGER_NAME)' VERSION='$(NATIVE_VER)' ./scripts/package/package_pacman_native.sh; \
-		cp packing/dpkg-native/opencode_[0-9]*.deb "$(RELEASE_DIR)/"; \
-		cp packing/pacman/opencode-[0-9]*.pkg.* "$(RELEASE_DIR)/"; \
-		for f in "$(RELEASE_DIR)/opencode-$(NATIVE_VER)-aarch64-android-native" "$(RELEASE_DIR)/opencode-$(NATIVE_VER)-report.json" "$(RELEASE_DIR)/opencode-$(NATIVE_VER)-watcher.tar.gz" $(RELEASE_DIR)/opencode_[0-9]*.deb $(RELEASE_DIR)/opencode-[0-9]*.pkg.*; do \
+		case "$(NATIVE_VER)" in 1.*) np=opencode1;; *) np=opencode;; esac; cp packing/dpkg-native/$$np_$(NATIVE_VER)_aarch64.deb "$(RELEASE_DIR)/" || exit 1; \
+		cp packing/pacman/$$np-$(NATIVE_VER)-*.pkg.* "$(RELEASE_DIR)/" || exit 1; \
+		for f in "$(RELEASE_DIR)/$$np-$(NATIVE_VER)-aarch64-android-native" "$(RELEASE_DIR)/$$np-$(NATIVE_VER)-report.json" "$(RELEASE_DIR)/$$np-$(NATIVE_VER)-watcher.tar.gz" $(RELEASE_DIR)/opencode_[0-9]*.deb $(RELEASE_DIR)/opencode-[0-9]*.pkg.*; do \
 			echo "  uploading $$(basename $$f)..."; \
 			if ! gh release upload "$(TAG)" "$$f" --repo "$(REPO)" --clobber 2>&1; then upload_failed=1; fi; \
 		done; \

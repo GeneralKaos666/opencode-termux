@@ -34,6 +34,12 @@ if [[ -z "${VERSION:-}" ]]; then
 	fi
 	VERSION="$(basename "${_builds[0]}")"
 fi
+
+# v1 (1.x) packages are renamed opencode1 (coexist with v2); v2 keeps `opencode`.
+case "$VERSION" in
+	1.*) PKG_NAME="opencode1" ;;
+	*)   PKG_NAME="opencode" ;;
+esac
 # task-tui-common-fix: prefer opencode-native-tui (post-TUI-swap product,
 # seccomp-hardened) with revived as fallback; OPENCODE_NATIVE_BIN still wins.
 NATIVE_BIN="${OPENCODE_NATIVE_BIN:-$TRANSPLANT_ROOT/$VERSION/opencode-native-tui}"
@@ -59,13 +65,14 @@ printf "\nPACKAGER=%q\n" "$PACKAGER_NAME" >>"$TMP_MAKEPKG_CONF"
 cp "$ROOT_DIR/packing/pacman/PKGBUILD.native" "$TMP_PKGBUILD"
 sed -i "s/^pkgver=.*/pkgver=$VERSION/" "$TMP_PKGBUILD"
 sed -i "s/^pkgrel=.*/pkgrel=$PKGREL/" "$TMP_PKGBUILD"
+sed -i "s/^pkgname=.*/pkgname=$PKG_NAME/" "$TMP_PKGBUILD"
 
 OPENCODE_NATIVE_BIN="$NATIVE_BIN" REPO_ROOT="$ROOT_DIR" makepkg --config "$TMP_MAKEPKG_CONF" -f --noconfirm -p "$TMP_PKGBUILD"
 
 echo "Native pacman package created under: $ROOT_DIR/packing/pacman"
 
 # --- Regression guard: reject packages with data/ payload paths (double-prefix bug) ---
-BUILT_PKG=$(ls "$ROOT_DIR/packing/pacman/opencode-${VERSION}-${PKGREL}-aarch64.pkg.tar.xz" 2>/dev/null || true)
+BUILT_PKG=$(ls "$ROOT_DIR/packing/pacman/${PKG_NAME}-${VERSION}-${PKGREL}-aarch64.pkg.tar.xz" 2>/dev/null || true)
 if [[ -n "$BUILT_PKG" ]]; then
     DATA_PAYLOAD=$(bsdtar -tf "$BUILT_PKG" | grep -E '^data/' | head -1 || true)
     if [[ -n "$DATA_PAYLOAD" ]]; then
