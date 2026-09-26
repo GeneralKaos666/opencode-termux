@@ -29,8 +29,17 @@ fi
 
 # Version: explicit VERSION wins, else resolve the single transplant build.
 if [[ -z "${VERSION:-}" ]]; then
+	# Resolve the single real version dir; ignore toolchain dirs that live under
+	# artifacts/transplant (android-bun, opentui-bionic*) so autodetect is stable.
 	shopt -s nullglob
-	_builds=("$TRANSPLANT_ROOT"/*)
+	_builds=()
+	for _d in "$TRANSPLANT_ROOT"/*; do
+		[[ -d "$_d" ]] || continue
+		case "$(basename "$_d")" in
+		android-bun | opentui-bionic*) continue ;;
+		esac
+		_builds+=("$_d")
+	done
 	shopt -u nullglob
 	if [[ ${#_builds[@]} -eq 0 ]]; then
 		echo "Error: no transplant builds under $TRANSPLANT_ROOT (run: make transplant VER=<x>)" >&2

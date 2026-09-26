@@ -1,81 +1,81 @@
-# TUI 崩溃修复过程与技术总览
+# TUI Crash Fix: Process and Technical Overview
 
-> 本文记录 OpenCode-on-Termux native 线 TUI 渲染层 (`libopentui.so`) 从首次崩溃到公共层根治的完整技术历程。涉及 commit `342d68d` (crashfix v2)、`17b51a4` / `10afa28` / `faf1334` (公共层根治三部曲)、补丁 `patches/opentui/fix-drawchar-negative-coords.patch` 和 `ffi-int-truncation-guards.patch`。
+> This document records the complete technical history of the OpenCode-on-Termux native-line TUI render layer (`libopentui.so`) from its first crash to the root-cause fix at the common layer. It covers commits `342d68d` (crashfix v2), `17b51a4` / `10afa28` / `faf1334` (the common-layer root-fix trilogy), and the patches `patches/opentui/fix-drawchar-negative-coords.patch` and `ffi-int-truncation-guards.patch`.
 
 ---
 
 ## TL;DR
 
-2026-08-25 alpha 包用户报告 TUI 点击展开 thinking 块时概率性 SIGABRT。根因分两层: (1) JS 侧负坐标/负尺寸经 FFI 以补码跨入 Zig 变为巨大 u32, `bufferDrawChar` 内 `@intCast(u32->i32)` 安全检查 panic; (2) 构建管线公共层 `libopentui.so` 从未应用补丁导致 13 版本全线复发。修复分两层: (1) `fix-drawchar-negative-coords.patch` 在 8 处插入 bit31 早退 + `@min(w/h, 0x7FFFFFFF)` 饱和钳位 + 饱和加法; (2) `build-libopentui.sh` 重写为五步管线 (补丁全应用 -> zig 构建 -> objdump 守卫自检 -> hostile FFI harness -> 装槽位), `swap_tui.py` 拒收无守卫 .so, `tui_smoke.py` pty 冒烟进常备矩阵。最终: 13 版本全量重建, 12/12 守卫验证通过, 1.18.21 通过新鲜 `make transplant` 重建后 smoke PASS, 4/4 golden 回归通过。
+On 2026-08-25 alpha-package users reported a probabilistic SIGABRT when clicking to expand the thinking block in the TUI. The root cause had two layers: (1) negative coordinates/sizes from the JS side crossed the FFI boundary as two's-complement values into Zig, becoming huge u32 values, and the `@intCast(u32->i32)` safety check inside `bufferDrawChar` panicked; (2) the build pipeline's common layer `libopentui.so` never had the patches applied, causing a full regression across all 13 versions. The fix had two layers: (1) `fix-drawchar-negative-coords.patch` inserts bit31 early-returns at 8 sites, `@min(w/h, 0x7FFFFFFF)` saturating clamps, and saturating addition; (2) `build-libopentui.sh` was rewritten as a five-step pipeline (apply all patches -> zig build -> objdump guard self-check -> hostile FFI harness -> install into slot), `swap_tui.py` rejects unguarded `.so` files, and `tui_smoke.py` pty smoke test became part of the standing matrix. Final result: all 13 versions fully rebuilt, 12/12 guard verifications passed, 1.18.21 rebuilt fresh via `make transplant` then smoke PASS, 4/4 golden regressions passed.
 
 ---
 
-## 时间线
+## Timeline
 
-| 日期 | 事件 | 关键 commit / hash |
-|------|------|--------------------|
-| 2026-08-25 | alpha 用户报告 TUI SIGABRT: 点击展开 thinking 块 -> `integer does not fit in destination type` in `lib.bufferDrawChar` | crash report |
-| 2026-08-25 | DIAG1: 从崩溃进程提取 `bun-10258.so` (fd29387d, 13,995,736B), 确认为 OpenTUI bionic lib (SONAME=libopentui.so) | DIAG1 完成 |
-| 2026-08-26 | DIAG2: 反汇编定位 `bufferDrawChar@0x2ad104` 内 4 个 `@intCast` 失败分支 (+0x12c/0x130/0x154/0x178), 锁定 `buffer.zig:925` 与 `:322-324` | DIAG2 完成 |
-| 2026-08-26 | v1 守卫 (仅坐标): `if (x >= 0x80000000 or y >= 0x80000000) return;` 插入 `buffer.zig:925` | 重建 FFI 压测: 坐标压力 PASS, scissor-residual FAIL |
-| 2026-08-26 | v2 守卫 (坐标 + scissor): `@min(scissor.width, 0x7FFFFFFF)` 钳位 + `+|` 饱和加法写入 `isPointInScissor` | **342d68d** `fix(opentui): guard negative FFI coords in bufferDrawChar` |
-| 2026-08-27 | beta 发布 1.18.21, 含 seccomp shim + TUI 守卫 v2; `tui_probe` 仅测 `--version` | `956515a` beta channel 标记 |
-| 2026-08-30~09-03 | Push260903 准备: 13 版本 wrapper + native 批量构建; 走 `transplant.py` 等长换入 | batch build logs |
-| 2026-09-03 | 发现 1.18.27 批量包内嵌 `libopentui.so` 无守卫; `build-libopentui.sh` (UNTRACKED) 未应用 `patches/opentui/*` | `task-tui-common-fix.log` P2 |
-| 2026-09-04 | P3: `build-libopentui.sh` 重写为五步管线; `swap_tui.py` 增加 `has_ffi_guard` 拒收逻辑; canonical .so 917,832B | **17b51a4** `fix(transplant): common-layer libopentui guard` |
-| 2026-09-04 | P4: 补丁扩展覆盖 `packages/native` 树 (`ffi-int-truncation-guards.patch`), differential FFI proof: 新构建 exit=0, 旧 .so exit=134 | **10afa28** `fix(transplant): wire libopentui common layer` |
-| 2026-09-04 | P5: 13 版本全量重建 + 12/12 守卫通过 + 4/4 golden + attach 冒烟 render=yes panic=no | **faf1334** `feat(transplant): P5 hardening` |
+| Date | Event | Key commit / hash |
+|------|-------|-------------------|
+| 2026-08-25 | Alpha user reports TUI SIGABRT: clicking to expand the thinking block -> `integer does not fit in destination type` in `lib.bufferDrawChar` | crash report |
+| 2026-08-25 | DIAG1: extract `bun-10258.so` (fd29387d, 13,995,736B) from the crashed process, confirmed as the OpenTUI bionic lib (SONAME=libopentui.so) | DIAG1 done |
+| 2026-08-26 | DIAG2: disassembly locates 4 `@intCast` failure branches inside `bufferDrawChar@0x2ad104` (+0x12c/0x130/0x154/0x178), pinning down `buffer.zig:925` and `:322-324` | DIAG2 done |
+| 2026-08-26 | v1 guard (coords only): `if (x >= 0x80000000 or y >= 0x80000000) return;` inserted at `buffer.zig:925` | Rebuild FFI stress test: coordinate stress PASS, scissor-residual FAIL |
+| 2026-08-26 | v2 guard (coords + scissor): `@min(scissor.width, 0x7FFFFFFF)` clamp + `+|` saturating add written into `isPointInScissor` | **342d68d** `fix(opentui): guard negative FFI coords in bufferDrawChar` |
+| 2026-08-27 | Beta release 1.18.21, includes seccomp shim + TUI guard v2; `tui_probe` only tests `--version` | `956515a` beta channel marker |
+| 2026-08-30~09-03 | Push260903 preparation: 13-version wrapper + native batch build; swap-in via `transplant.py` equal-length replacement | batch build logs |
+| 2026-09-03 | Found that the 1.18.27 batch package embedded an unguarded `libopentui.so`; `build-libopentui.sh` (UNTRACKED) did not apply `patches/opentui/*` | `task-tui-common-fix.log` P2 |
+| 2026-09-04 | P3: `build-libopentui.sh` rewritten as a five-step pipeline; `swap_tui.py` gains `has_ffi_guard` rejection logic; canonical .so 917,832B | **17b51a4** `fix(transplant): common-layer libopentui guard` |
+| 2026-09-04 | P4: patch extended to cover the `packages/native` tree (`ffi-int-truncation-guards.patch`); differential FFI proof: new build exit=0, old .so exit=134 | **10afa28** `fix(transplant): wire libopentui common layer` |
+| 2026-09-04 | P5: full rebuild of 13 versions + 12/12 guards passed + 4/4 golden + attach smoke render=yes panic=no | **faf1334** `feat(transplant): P5 hardening` |
 
 ---
 
-## 崩溃机制
+## Crash Mechanism
 
-### 触发路径
+### Trigger Path
 
 ```
-JS Renderable._screenX/_screenY (可为负, thinking 块顶部越出视口)
-  -> buffer.ts:613 drawChar (未 clamp, 直传 lib.bufferDrawChar)
-    -> FFI 边界: lib.zig:3207 export fn bufferDrawChar(buffer_handle, char:u32, x:u32, y:u32, ...)
-      -> JS 负数 (-1) 经补码变为 u32 0xFFFFFFFF (bit31 set)
-        -> bufferDrawChar 内 @intCast(u32->i32) 安全检查
+JS Renderable._screenX/_screenY (can be negative; thinking block top goes beyond the viewport)
+  -> buffer.ts:613 drawChar (no clamp, passes straight to lib.bufferDrawChar)
+    -> FFI boundary: lib.zig:3207 export fn bufferDrawChar(buffer_handle, char:u32, x:u32, y:u32, ...)
+      -> JS negative number (-1) becomes u32 0xFFFFFFFF via two's complement (bit31 set)
+        -> @intCast(u32->i32) safety check inside bufferDrawChar
           -> panic: "integer does not fit in destination type"
             -> SIGABRT (rc=134)
 ```
 
-### 反汇编定位实录
+### Disassembly Localization Record
 
-从未 strip 的崩溃 .so (fd29387d) 反汇编 `bufferDrawChar@vaddr 0x2ad104`:
+Disassembling `bufferDrawChar@vaddr 0x2ad104` from the un-stripped crashed .so (fd29387d):
 
-- `+0x12c` (`0x2ad230`): `tbnz w0, #31, fail` -- `@intCast(x)` 失败分支
-- `+0x130` (`0x2ad234`): `tbnz w0, #31, fail` -- `@intCast(y)` 失败分支
-- `+0x154` (`0x2ad258`): `tbnz w0, #31, fail` -- `@intCast(scissor.width)` 失败分支
-- `+0x178` (`0x2ad27c`): `tbnz w0, #31, fail` -- `@intCast(scissor.height)` 失败分支
+- `+0x12c` (`0x2ad230`): `tbnz w0, #31, fail` -- `@intCast(x)` failure branch
+- `+0x130` (`0x2ad234`): `tbnz w0, #31, fail` -- `@intCast(y)` failure branch
+- `+0x154` (`0x2ad258`): `tbnz w0, #31, fail` -- `@intCast(scissor.width)` failure branch
+- `+0x178` (`0x2ad27c`): `tbnz w0, #31, fail` -- `@intCast(scissor.height)` failure branch
 
-4 个 fail 分支统一跳转 `0x2ad610` 引用 `defaultPanic.integerOutOfBounds` (vaddr `0x3509a4`), panic 串 `"integer does not fit in destination type"` 位于 `0x4074a`。
+All 4 fail branches jump to `0x2ad610`, which references `defaultPanic.integerOutOfBounds` (vaddr `0x3509a4`); the panic string `"integer does not fit in destination type"` lives at `0x4074a`.
 
-`validateAndIndex@0x2aea54` 证实结构体布局: `width@[0x118]`, `height@[0x11c]`, `scissor_stack@[0xd0/0xd8]`。
+`validateAndIndex@0x2aea54` confirms the struct layout: `width@[0x118]`, `height@[0x11c]`, `scissor_stack@[0xd0/0xd8]`.
 
-### 暴露场景
+### Exposure Scenario
 
-`Renderable.ts:1521` 的 `_screenX` / `_screenY` 在 thinking 块展开后顶部越出视口或滚动裁剪边界时为负值。经 `Renderable.ts:1424-1434` 的 `pushScissorRect` 进入 `scissor_stack`, 产生负派生 scissor 尺寸。点击展开 thinking 块是概率性触发, 取决于滚动位置、内容宽度、点击时机。
+`Renderable.ts:1521`'s `_screenX` / `_screenY` take negative values when the expanded thinking block's top goes beyond the viewport or the scroll clipping boundary. Via `Renderable.ts:1424-1434`'s `pushScissorRect` they enter `scissor_stack`, producing negative derived scissor sizes. Clicking to expand the thinking block is a probabilistic trigger, depending on scroll position, content width, and click timing.
 
 ---
 
-## 修复演进
+## Fix Evolution
 
-### v1: 仅坐标守卫
+### v1: Coordinate Guard Only
 
 ```zig
 // buffer.zig:925 setVisibleCellWithAlphaBlending
-if (x >= 0x80000000 or y >= 0x80000000) return;  // 新增: bit31 早退
+if (x >= 0x80000000 or y >= 0x80000000) return;  // added: bit31 early return
 if (!self.isPointInScissor(@intCast(x), @intCast(y))) return;
 ```
 
-效果: FFI 坐标压力测试 2000 次迭代 PASS, 但 **scissor-residual 压测失败** -- `isPointInScissor` 内 `@intCast(scissor.width)` / `@intCast(scissor.height)` 仍然 panic (rc=134)。
+Effect: FFI coordinate stress test PASS over 2000 iterations, but **scissor-residual stress test FAILED** -- `@intCast(scissor.width)` / `@intCast(scissor.height)` inside `isPointInScissor` still panicked (rc=134).
 
-教训: 只守坐标入口不够; scissor 尺寸来自 JS 侧 `pushScissorRect`, 同样可携带负派生值跨 FFI。
+Lesson: guarding only the coordinate entry point is not enough; scissor sizes come from the JS side's `pushScissorRect` and can likewise carry negative derived values across the FFI boundary.
 
-### v2: isPointInScissor 内饱和钳位 (342d68d)
+### v2: Saturating Clamp Inside isPointInScissor (342d68d)
 
 ```zig
 // buffer.zig:297-303 isPointInScissor
@@ -89,137 +89,137 @@ pub fn isPointInScissor(self: *const OptimizedBuffer, x: i32, y: i32) bool {
 }
 ```
 
-关键设计选择:
+Key design choices:
 
-| 守卫策略 | 适用场景 | 实现 |
+| Guard strategy | Applicable scenario | Implementation |
 |----------|---------|------|
-| bit31 早退 | FFI 入口坐标 (x/y u32) | `if (x >= 0x80000000) return;` |
-| `@min(w/h, 0x7FFFFFFF)` 钳位 | scissor 尺寸 (width/height u32) | clamp 后再 `@intCast` 安全转换 |
-| 饱和加法 `+\|` | 终点坐标计算 | `x +| w` 不溢出, 超界即被 `@min` 截断 |
-| `<= -0x40000000` 早退 | `drawTextBufferInternal` 等 `@intCast(-y)` | 防 `INT32_MIN` 取反溢出 |
+| bit31 early return | FFI entry coordinates (x/y u32) | `if (x >= 0x80000000) return;` |
+| `@min(w/h, 0x7FFFFFFF)` clamp | scissor sizes (width/height u32) | safe conversion via `@intCast` after clamping |
+| Saturating addition `+\|` | endpoint coordinate calculation | `x +| w` does not overflow; out-of-bounds gets truncated by `@min` |
+| `<= -0x40000000` early return | `drawTextBufferInternal` etc. `@intCast(-y)` | prevents `INT32_MIN` negation overflow |
 
-效果: FFI 差分压测 (含 `pushScissorRect` toggle 循环) 2000 次迭代新旧 .so 对比 -- 新 .so 全 PASS (rc=0), 旧 .so SIGABRT (rc=134)。TUI smoke 通过。
+Effect: FFI differential stress test (including a `pushScissorRect` toggle loop) over 2000 iterations, old vs new .so -- new .so all PASS (rc=0), old .so SIGABRT (rc=134). TUI smoke passed.
 
 ---
 
-## 复发与根因 (1.18.27 批量包)
+## Regression and Root Cause (1.18.27 Batch Package)
 
-### 事实
+### Facts
 
-2026-09-03 发现: 1.18.27 的 pacman 包内嵌 `libopentui.so` **无任何守卫**, `objdump` guard pattern count = 0, attach SIGABRT 依旧。13 版本全线如此。
+Found 2026-09-03: the `libopentui.so` embedded in the 1.18.27 pacman package had **no guards at all**, `objdump` guard pattern count = 0, attach SIGABRT persisted. All 13 versions were like this.
 
-### 根因链
+### Root Cause Chain
 
 ```
-build-libopentui.sh (UNTRACKED 文件, 未纳入 git)
-  -> 不应用 patches/opentui/* 补丁
-    -> 构建的 .so 是原始无守卫版本
+build-libopentui.sh (UNTRACKED file, not committed to git)
+  -> does not apply patches/opentui/* patches
+    -> the built .so is the original unguarded version
 
 transplant.py:1410
-  -> 硬编码 bionic_lib = artifacts/transplant/opentui-bionic/libopentui.so
-    -> 该文件 mtime Aug 24, 早于 fix commit 342d68d (Aug 26)
-      -> 永远是旧的无守卫 .so
+  -> hardcodes bionic_lib = artifacts/transplant/opentui-bionic/libopentui.so
+    -> that file's mtime is Aug 24, earlier than fix commit 342d68d (Aug 26)
+      -> permanently the old unguarded .so
 
-transplant.py 等长换入
-  -> 所有版本的 .bun slot 替换同一份旧 .so
-    -> 13 版本全量继承缺陷
+transplant.py equal-length swap-in
+  -> all versions' .bun slots replace the same old .so
+    -> all 13 versions inherit the defect
 ```
 
-### 伴生发现
+### Incidental Discovery
 
-老 1.18.21 host bun 缺 `bun:ffi` dlopen (TinyCC disabled), `libopentui.so` 从不可用。`tui_probe` 只测 `--version` (进程存活即 PASS), **不测渲染层**, 掩盖了问题。
+The old 1.18.21 host bun lacked `bun:ffi` dlopen (TinyCC disabled), so `libopentui.so` was never usable. `tui_probe` only tested `--version` (process surviving = PASS), **not the render layer**, masking the problem.
 
-### 通用教训
+### General Lessons
 
-- **公共层陈旧产物复用 = 批量线整批继承缺陷**: 一份 stale .so 经等长换入污染所有版本
-- **UNTRACKED 构建脚本 = 不可见退化**: `build-libopentui.sh` 未纳入 git, 补丁应用步骤丢失无人察觉
-- **探针必须测到渲染层**: `--version` 通过不代表 TUI 可用; 必须 pty 冒烟 + panic 扫描
+- **Reusing stale common-layer artifacts = entire batch inherits the defect**: one stale .so pollutes all versions via equal-length swap-in
+- **UNTRACKED build scripts = invisible regressions**: `build-libopentui.sh` was not committed to git, so the lost patch-application step went unnoticed
+- **Probes must test the render layer**: `--version` passing does not mean the TUI works; pty smoke + panic scanning is required
 
 ---
 
-## 公共层根治架构
+## Common-Layer Root-Fix Architecture
 
-### canonical 构建五步 (build-libopentui.sh)
+### Canonical Build Five Steps (build-libopentui.sh)
 
 ```
-Step 1: 补丁全应用
-  -> reverse-first: 先 reverse, 再 git apply patches/opentui/*.patch
-  -> 确保幂等: 无补丁时干净, 有补丁时不重复
+Step 1: Apply all patches
+  -> reverse-first: reverse first, then git apply patches/opentui/*.patch
+  -> ensure idempotence: clean when unpatched, no duplication when patched
 
-Step 2: zig 0.16 bionic 构建
+Step 2: zig 0.16 bionic build
   -> zig build -Dlibrary-target=aarch64-linux-android -Doptimize=ReleaseSafe
   -> NDK bionic sysroot + libm
 
-Step 3: objdump guard 自检 (fail-loudly)
-  -> 扫描 guard-owning symbols 内编译后的守卫 pattern
-  -> 未检测到 clamp/csel 指令 = 构建失败
+Step 3: objdump guard self-check (fail-loudly)
+  -> scan the compiled guard pattern inside guard-owning symbols
+  -> no clamp/csel instructions detected = build failure
 
 Step 4: ffi_guard_harness.c (hostile FFI harness)
-  -> dlopen + dlsym 所有 FFI 入口
-  -> 注入 bit31 坐标 drawChar + INT32_MIN grayscale + 巨型 fill/scissor
-  -> exit=0 才放行; exit=134 (SIGABRT) = 构建失败
+  -> dlopen + dlsym all FFI entry points
+  -> inject bit31 coordinates drawChar + INT32_MIN grayscale + huge fill/scissor
+  -> only release if exit=0; exit=134 (SIGABRT) = build failure
 
-Step 5: 装槽位
-  -> llvm-strip -> cp -> 清理 build artifacts
+Step 5: Install into slot
+  -> llvm-strip -> cp -> clean build artifacts
 ```
 
-### swap_tui.py 守卫验证
+### swap_tui.py Guard Verification
 
-`has_ffi_guard()` 扫描 ELF 内 guard-owning symbols (如 `bufferDrawChar`, `isPointInScissor`) 的代码段, 检测编译后的守卫 pattern:
-- `mov wN, #0x7fffffff` 钳位指令 (MOVN #0x8000, LSL#16)
-- `csel ..., vs` 饱和加法分支
+`has_ffi_guard()` scans the code sections of guard-owning symbols (e.g. `bufferDrawChar`, `isPointInScissor`) within the ELF, detecting the compiled guard pattern:
+- `mov wN, #0x7fffffff` clamp instruction (MOVN #0x8000, LSL#16)
+- `csel ..., vs` saturating-add branch
 
-未检测到守卫 pattern -> 拒收该 .so, `swap_tui.py` 退出码 5。
+If the guard pattern is not detected -> reject that .so, `swap_tui.py` exits with code 5.
 
-### tui_smoke.py pty 冒烟
+### tui_smoke.py pty Smoke Test
 
 ```
-1. 打开 pty, 启动 opencode 进程
-2. 等待 TUI 渲染 (检测 ANSI 序列)
-3. 执行交互操作 (打开 session, 点击 thinking 块)
-4. 扫描 stderr/进程输出中的 panic 关键字
-5. 运行时提取内嵌 .so (从 /proc/<pid>/maps + dd)
-6. 对提取 .so 运行 has_ffi_guard 验证
+1. Open a pty, launch the opencode process
+2. Wait for TUI rendering (detect ANSI sequences)
+3. Perform interactive actions (open session, click thinking block)
+4. Scan stderr/process output for panic keywords
+5. Extract the embedded .so at runtime (from /proc/<pid>/maps + dd)
+6. Run has_ffi_guard verification on the extracted .so
 ```
 
 ---
 
-## 补丁覆盖清单
+## Patch Coverage List
 
 ### fix-drawchar-negative-coords.patch (buffer.zig + renderer.zig, packages/core)
 
-| # | 文件:位置 | 守卫类型 | 防御的输入形态 |
+| # | File:location | Guard type | Input form defended against |
 |---|----------|---------|--------------|
-| 1 | `buffer.zig:297-303` `isPointInScissor` | `@min(w/h, 0x7FFFFFFF)` + `+\|` 饱和加法 | 负派生 scissor 尺寸跨 FFI 变 u32 |
-| 2 | `buffer.zig:320-324` `clipRectToScissor` | 同上 | 同上 (clipRect 终点计算) |
-| 3 | `buffer.zig:807` `setVisibleCellWithAlphaBlending` | `if (x >= 0x80000000 or y >= 0x80000000) return;` | FFI 坐标 bit31 set |
-| 4 | `buffer.zig:838` `setCellWithAlphaBlendingRaw` | 同上 | 同上 |
-| 5 | `buffer.zig:1248` `drawTextBufferInternal` | `if (y <= -0x40000000) return;` | `INT32_MIN` 取反溢出 |
-| 6 | `buffer.zig:2131` `drawGrayscaleBuffer` | `if (posX < -0x40000000 or posY < -0x40000000) return;` | 同上 (灰度缓冲区) |
-| 7 | `buffer.zig:2200` `drawGrayscaleBufferSupersampled` | 同上 | 同上 (超采样灰度) |
-| 8 | `renderer.zig:936/995/1000` hit-grid scissor | `@min(clipped.w/h, 0x7FFFFFFF)` + `+\|` | renderer 命中网格 scissor |
+| 1 | `buffer.zig:297-303` `isPointInScissor` | `@min(w/h, 0x7FFFFFFF)` + `+\|` saturating add | negative derived scissor size crossing FFI as u32 |
+| 2 | `buffer.zig:320-324` `clipRectToScissor` | same as above | same as above (clipRect endpoint calculation) |
+| 3 | `buffer.zig:807` `setVisibleCellWithAlphaBlending` | `if (x >= 0x80000000 or y >= 0x80000000) return;` | FFI coordinate bit31 set |
+| 4 | `buffer.zig:838` `setCellWithAlphaBlendingRaw` | same as above | same as above |
+| 5 | `buffer.zig:1248` `drawTextBufferInternal` | `if (y <= -0x40000000) return;` | `INT32_MIN` negation overflow |
+| 6 | `buffer.zig:2131` `drawGrayscaleBuffer` | `if (posX < -0x40000000 or posY < -0x40000000) return;` | same as above (grayscale buffer) |
+| 7 | `buffer.zig:2200` `drawGrayscaleBufferSupersampled` | same as above | same as above (supersampled grayscale) |
+| 8 | `renderer.zig:936/995/1000` hit-grid scissor | `@min(clipped.w/h, 0x7FFFFFFF)` + `+\|` | renderer hit-grid scissor |
 
 ### ffi-int-truncation-guards.patch (packages/native)
 
-覆盖 `packages/native/src/buffer.zig` 和 `renderer.zig` 中与 core 树同构的函数: `setCellWithAlphaBlendingCellWithoutImages` (:908), `setCellWithAlphaBlendingRawCell` (:964), `drawTextBufferInternal` (:1661), `drawGrayscaleBuffer` (:2828), `drawGrayscaleBufferSupersampled` (:2897), `renderer` hit-scissor (:2824/2885/2959)。守卫模式与 core 树完全一致。
+Covers the functions in `packages/native/src/buffer.zig` and `renderer.zig` isomorphic to the core tree: `setCellWithAlphaBlendingCellWithoutImages` (:908), `setCellWithAlphaBlendingRawCell` (:964), `drawTextBufferInternal` (:1661), `drawGrayscaleBuffer` (:2828), `drawGrayscaleBufferSupersampled` (:2897), `renderer` hit-scissor (:2824/2885/2959). The guard pattern is fully identical to the core tree.
 
-### SAFE 不改清单
+### SAFE: Not-Changed List
 
-| 位置 | 原因 |
+| Location | Reason |
 |------|------|
-| `setCell` (非 Blending 变体) | 不经过 `@intCast` 到 i32, 直接作为 u32 索引使用 |
-| `OptimizedBuffer.set` / `get` | 内部全 u32 运算, 不涉及有符号转换 |
-| `blendCells` | 纯 u32 算术, 无 `@intCast` |
-| `getCurrentScissorRect` 返回值 | 返回 `?ClipRect`, 裁剪判定由调用方 `isPointInScissor` 处理 |
-| `pushScissorRect` 调用侧 | 负值合法 (表示视口外), 由 scissor 守卫端吸收 |
+| `setCell` (non-Blending variant) | does not go through `@intCast` to i32; used directly as u32 index |
+| `OptimizedBuffer.set` / `get` | all internal u32 arithmetic, no signed conversion involved |
+| `blendCells` | pure u32 arithmetic, no `@intCast` |
+| `getCurrentScissorRect` return value | returns `?ClipRect`; clipping decision handled by caller `isPointInScissor` |
+| `pushScissorRect` call side | negative values are legal (means outside viewport), absorbed by the scissor guard side |
 
 ---
 
-## 验证矩阵
+## Verification Matrix
 
-### 13 版本重建结果
+### 13-Version Rebuild Results
 
-| 版本 | 守卫验证 (guard_check) | smoke (render) | 版本匹配 (tar) | SHA ok |
+| Version | Guard verification (guard_check) | smoke (render) | Version match (tar) | SHA ok |
 |------|----------------------|----------------|----------------|--------|
 | 1.18.15 | PASS | PASS | PASS | PASS |
 | 1.18.16 | PASS | PASS | PASS | PASS |
@@ -235,76 +235,108 @@ Step 5: 装槽位
 | 1.18.26 | PASS | PASS | PASS | PASS |
 | 1.18.27 | PASS | PASS | PASS | PASS |
 
-注: 1.18.21 初次 smoke FAIL (render=NO, guard=no-so), 原因: 旧 host bun 缺 `bun:ffi` dlopen。通过 `make transplant VER=1.18.21` 新鲜重建后 PASS。
+Note: 1.18.21 initially failed smoke (render=NO, guard=no-so), cause: old host bun lacked `bun:ffi` dlopen. PASS after a fresh rebuild via `make transplant VER=1.18.21`.
 
-### Golden 回归
+### Golden Regression
 
-| golden | 状态 |
+| golden | Status |
 |--------|------|
 | 1.2.9 | PASS |
 | 1.3.11 | PASS |
 | 1.3.13 | PASS |
 | synth-36b | PASS |
 
-### Attach 冒烟
+### Attach Smoke
 
 ```
 opencode attach localhost:4097 -s ses_f94b5affcffe0qtniR5tEoeXKT
 -> render=yes, panic=no, exit=0
 ```
 
-### 差分 FFI 压测
+### Differential FFI Stress Test
 
-| .so | 坐标压力 2000 iter | scissor-residual 2000 iter |
+| .so | Coordinate stress 2000 iter | scissor-residual 2000 iter |
 |-----|---------------------|---------------------------|
-| 新构建 (guard=OK) | PASS (rc=0) | PASS (rc=0) |
-| 旧崩溃 .so (fd29387d) | SIGABRT (rc=134) | SIGABRT (rc=134) |
+| New build (guard=OK) | PASS (rc=0) | PASS (rc=0) |
+| Old crashed .so (fd29387d) | SIGABRT (rc=134) | SIGABRT (rc=134) |
 
 ---
 
-## 遗留风险
+## Residual Risks
 
-1. **guard 机器码 pattern 依赖编译器**: `has_ffi_guard()` 扫描 `mov wN, #0x7fffffff` 和 `csel ..., vs` 指令 pattern。zig 0.16 + NDK r29 aarch64 当前输出这些 pattern, 但 zig 版本升级或 NDK 变更可能改变编译器输出, 导致 guard scan 误判。需在 zig/NDK 升级时重新验证。
+1. **Guard machine-code pattern depends on the compiler**: `has_ffi_guard()` scans for the `mov wN, #0x7fffffff` and `csel ..., vs` instruction patterns. zig 0.16 + NDK r29 aarch64 currently emits these patterns, but a zig version upgrade or NDK change could alter compiler output, causing a guard-scan false negative. Must re-verify when zig/NDK is upgraded.
 
-2. **crhandler 逐版 ABI 未审计**: seccomp SIGSYS shim (`libopencode-crhandler.so`) 作为 `DT_NEEDED` 被注入每个版本的二进制。当前只验证了存在性和 dlopen 成功, 未逐版审计 ABI 兼容性。
+2. **crhandler per-version ABI not audited**: the seccomp SIGSYS shim (`libopencode-crhandler.so`) is injected as `DT_NEEDED` into every version's binary. So far only existence and dlopen success have been verified; ABI compatibility has not been audited per version.
 
-3. **tui_smoke 暖缓存依赖**: pty 冒烟依赖 bun 编译缓存 (`$HOME/.bun/install/cache`)。冷缓存环境下首次启动可能超时, 导致 smoke 误判 FAIL。
+3. **tui_smoke warm-cache dependency**: the pty smoke test depends on the bun compile cache (`$HOME/.bun/install/cache`). In a cold-cache environment the first start may time out, causing a false smoke FAIL.
 
-4. **0.1.101 profile 弃用警告**: zig 0.16 构建时输出 `warning: ...deprecated in newer Zig versions` (profile `aarch64-linux-android`), 不影响编译但可能在 zig 0.17+ 成为硬错误。
+4. **0.1.101 profile deprecation warning**: the zig 0.16 build emits `warning: ...deprecated in newer Zig versions` (profile `aarch64-linux-android`); it does not affect compilation but may become a hard error in zig 0.17+.
 
 ---
 
-## 索引
+## 2026-09-22 regression: glibc libopentui.so embedded in the v2 B-line
 
-### 提交链
+**Symptom** — `opencode-native-revived` (2.0.0/2.0.12) started but the TUI aborted:
 
-| commit | 日期 | 说明 |
+```
+Error: Failed to initialize OpenTUI render library: Failed to open library
+".../$TMPDIR/.bun-<pid>-<hash>.so": dlopen failed: library "libm.so.6" not found
+```
+
+`--version` worked (it never loads the TUI lib).
+
+**Root cause** — `scripts/build-bionic.sh` deployed the bionic `.so` to a single
+node_modules location chosen by a fallback glob
+(`@opentui+core-linux-arm64@*` else `@opentui+core@*`). When the first glob
+missed, the file bun actually bundles — `@opentui/core-linux-arm64/libopentui.so`
+— stayed the glibc prebuilt (NEEDED `libm.so.6`, 5,867,248 B). The miss was
+triggered by the step-0.6 batch `bun install` aborting on the nonexistent
+`@opentui/solid-linux-arm64@0.5.10` (404). Post-hoc `swap_tui.py` cannot fix it:
+the bionic `.so` (6,004,328 B) is larger than the embedded glibc slot.
+
+**Fix** — in `scripts/build-bionic.sh`:
+
+1. step 0.6 installs each platform package separately (drops the unpublished `@opentui/solid-linux-arm64`), so one 404 can't abort the batch;
+2. every `libopentui.so` under `node_modules` is overwritten with the bionic build, **after** the pty/watcher install (which `bun install --force` re-extracts);
+3. a **pre-compile hard assertion** rejects a glibc `@opentui/core-linux-arm64/libopentui.so`;
+4. a **post-compile hard assertion** scans the product for embedded `SONAME=libopentui.so` ELFs and rejects any with NEEDED `libm.so.6`.
+
+**Verification** — rebuilt 2.0.12: both assertions pass; TUI renders (model
+selector + prompt + `2.0.12` status bar); `opencode_2.0.12_aarch64.deb` builds.
+
+---
+
+## Index
+
+### Commit Chain
+
+| commit | Date | Description |
 |--------|------|------|
 | `342d68d` | 2026-08-26 | crashfix v2: guard negative FFI coords in bufferDrawChar |
-| `17b51a4` | 2026-09-04 | 公共层根治: common-layer libopentui guard, 拒收无守卫 swap |
-| `10afa28` | 2026-09-04 | 公共层扩展: wire libopentui common layer + extend guard patch |
+| `17b51a4` | 2026-09-04 | common-layer root fix: common-layer libopentui guard, reject unguarded swap |
+| `10afa28` | 2026-09-04 | common-layer extension: wire libopentui common layer + extend guard patch |
 | `faf1334` | 2026-09-04 | P5 hardening: w7b native recipe, pty smoke gate, truncation guard |
 
-### 补丁文件
+### Patch Files
 
-| 路径 | 目标树 | 守卫点数 |
+| Path | Target tree | Guard sites |
 |------|--------|---------|
 | `patches/opentui/fix-drawchar-negative-coords.patch` | packages/core/src/zig | 8 |
 | `patches/opentui/ffi-int-truncation-guards.patch` | packages/native/src | 8 |
 
-### 脚本
+### Scripts
 
-| 路径 | 功能 |
+| Path | Function |
 |------|------|
-| `tools/transplant/build-libopentui.sh` | canonical 五步构建管线 |
-| `tools/transplant/swap_tui.py` | 等长 slot swap + `has_ffi_guard` 拒收 |
-| `tools/transplant/tui_smoke.py` | pty 冒烟: render + panic scan + runtime .so 提取 |
+| `tools/transplant/build-libopentui.sh` | canonical five-step build pipeline |
+| `tools/transplant/swap_tui.py` | equal-length slot swap + `has_ffi_guard` rejection |
+| `tools/transplant/tui_smoke.py` | pty smoke: render + panic scan + runtime .so extraction |
 
-### Evidence 日志
+### Evidence Logs
 
-| 路径 | 内容 |
+| Path | Content |
 |------|------|
-| `.omo/evidence/task-crash-alpha260825.log` | 原始 DIAG1/DIAG2 崩溃诊断链 |
-| `.omo/evidence/task-tui-common-fix.log` | 公共层根治五阶段 (T1-T2, P3-P5) |
-| `.omo/evidence/task-w10a-tui-deep-smoke.log` | W10a 深度 TUI 冒烟 |
-| `.omo/evidence/task-w7b-opentui-bionic.log` | W7b opentui bionic 构建 |
+| `.omo/evidence/task-crash-alpha260825.log` | original DIAG1/DIAG2 crash diagnosis chain |
+| `.omo/evidence/task-tui-common-fix.log` | common-layer root fix five phases (T1-T2, P3-P5) |
+| `.omo/evidence/task-w10a-tui-deep-smoke.log` | W10a deep TUI smoke |
+| `.omo/evidence/task-w7b-opentui-bionic.log` | W7b opentui bionic build |

@@ -16,9 +16,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "opencode version (e.g. 1.3.13)"
+        description: "opencode version (e.g. 1.18.31)"
         required: false
-        default: "1.18.21"
+        default: "1.18.31"
 
 env:
   BUN_BIND_JSON: tools/transplant/config/bun-bind.json
@@ -26,8 +26,22 @@ env:
 jobs:
   transplant:
     runs-on: ubuntu-latest
+    env:
+      OPENCODE_VER: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Echo resolved inputs (evidence)
+        run: |
+          set -euo pipefail
+          echo "inputs.version=${{ inputs.version }}"
+          echo "github.event.inputs.version=${{ github.event.inputs.version }}"
+          echo "OPENCODE_VER=$OPENCODE_VER"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          if [ -z "$OPENCODE_VER" ]; then
+            echo "ERROR: resolved version is empty (input did not propagate)" >&2
+            exit 1
+          fi
 
       - name: Prepare directories
         run: |
@@ -50,9 +64,15 @@ jobs:
 
       - name: Download opencode tgz
         run: |
-          VER="${{ github.event.inputs.version }}"
+          set -euo pipefail
+          VER="${OPENCODE_VER:?OPENCODE_VER is empty (input did not propagate)}"
+          echo "packing opencode-linux-arm64@$VER"
           npm pack "opencode-linux-arm64@$VER" --pack-destination work/
           ls -la work/
+          test -f "work/opencode-linux-arm64-$VER.tgz" || {
+            echo "ERROR: expected work/opencode-linux-arm64-$VER.tgz not found" >&2
+            exit 1
+          }
 
       # NOTE: intentionally NO pre-staging of the android Bun zip here.
       # transplant.py pins its own BUN_URL and downloads idempotently into its
@@ -65,8 +85,14 @@ jobs:
 
       - name: Run transplant pipeline (--no-execve)
         run: |
-          VER="${{ github.event.inputs.version }}"
-          TGZ="$(ls work/opencode-linux-arm64-*.tgz | head -1)"
+          set -euo pipefail
+          VER="${OPENCODE_VER:?OPENCODE_VER is empty (input did not propagate)}"
+          TGZ="work/opencode-linux-arm64-$VER.tgz"
+          test -f "$TGZ" || {
+            echo "ERROR: tgz $TGZ missing (version/artifact mismatch)" >&2
+            ls -la work/ >&2 || true
+            exit 1
+          }
           python3 tools/transplant/transplant.py all --ver "$VER" --tgz "$TGZ" --no-execve
           ls -la artifacts/transplant/"$VER"/
 
@@ -96,8 +122,8 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: transplant-${{ github.event.inputs.version }}
-          path: artifacts/transplant/${{ github.event.inputs.version }}/
+          name: transplant-${{ inputs.version }}
+          path: artifacts/transplant/${{ inputs.version }}/
           retention-days: 30
 
       - name: Write status (attempt-based evidence)
@@ -105,7 +131,7 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
-          ver = "${{ github.event.inputs.version }}"
+          ver = "${{ inputs.version }}"
           out = Path("artifacts/transplant") / ver
           report = json.loads((out / "report.json").read_text()) if (out / "report.json").is_file() else {}
           assets = sorted(str(p.relative_to(Path("artifacts"))) for p in out.rglob("*") if p.is_file())
