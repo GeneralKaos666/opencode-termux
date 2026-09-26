@@ -141,9 +141,9 @@ glibc（旧 wrapper 路线基底）
 
 ### 3.2 迁移顺序（用户确认方案）
 
-1. **【先做】pure-android 现状并入 glibc 分支定稿**
-   - 包装路线所有成熟改动（produce-local、plugin-manager、hooks、批量构建）合入 glibc
-   - glibc 成为纯 wrapper 路线的稳定归宿，后续仅做低成本优化（§5.1）
+1. **【先做】pure-android 现状并入 wrapper 分支定稿**
+   - 包装路线所有成熟改动（produce-local、plugin-manager、hooks、批量构建）合入 wrapper
+   - wrapper 成为纯 wrapper 路线的稳定归宿，后续仅做低成本优化（§5.1）
 2. **【后做】pure-android 转型为混合原生路线**
    - 基底切换为官方 android Bun（§4）而非自编译
    - 目标: 真原生 Bionic、零 glibc、降级补全、版本不钉死
@@ -269,7 +269,7 @@ packing/manifests/watcher.json # 安装清单 (随包安装到 $PREFIX/lib/openc
 
 ## 7. 优化措施总览
 
-### 7.1 Wrapper 路线（glibc 分支定稿后的低成本优化, 立即可做）
+### 7.1 Wrapper 路线（wrapper 分支定稿后的低成本优化, 立即可做）
 
 1. **OFFSET 直读缓存头**（改 build.py 阶段）: 启动时按固定偏移读 BUNWRAP1 元数据 + 每 lib 的文件偏移表，直接 mmap 各段，**消灭 183MB 堆读**
 2. **launcher.sh → 静态 launcher**（可选）: bin/opencode 改为链接到 native 小 ELF（省 bash 解释 + fork 开销 ~30ms）

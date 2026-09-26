@@ -12,7 +12,7 @@ one replaces the other.
 
 | 旧名称 | 新名称 | 渠道 |
 |---|---|---|
-| `opencode`（glibc wrapper 线） | `opencode-wrapper` | 稳定附录（glibc 双轨包） |
+| `opencode`（wrapper 线） | `opencode-wrapper` | 稳定附录（glibc 双轨包） |
 | `opencode-native`（native bionic 线） | `opencode` | 稳定主推（native 线） |
 | —（新增过渡包） | `opencode-wrapper-standalone` | 命令入口 `opencode-wrapper`，与 `opencode` 可共存，单版本冻结，用于回退 |
 
@@ -43,7 +43,7 @@ one replaces the other.
 
 仓库主线已切换到 native 线（发布主渠道与开发主线），glibc/pure 双轨已降级为附录维护（appendix maintenance）。
 
-| | Track 1: glibc wrapper (`opencode-wrapper`) | Track 2: native (`opencode`) |
+| | Track 1: wrapper (`opencode-wrapper`) | Track 2: native (`opencode`) |
 |---|---|---|
 | Status | Appendix maintenance | **Stable mainline** (since 27/28) |
 | Runtime | glibc via bun-termux-loader userland exec | Pure Bionic (zero glibc deps) |
@@ -51,7 +51,7 @@ one replaces the other.
 | TUI | Works | Works (bionic libopentui.so; W10a deep smoke 5/5) |
 | Requirement | `bash` + `ncurses` (self-contained; no glibc/openssl-glibc packages needed) | Android API >= 28 |
 
-## Track 1 — glibc wrapper (appendix maintenance, renamed `opencode-wrapper`)
+## Track 1 — wrapper (appendix maintenance, renamed `opencode-wrapper`)
 
 The `opencode-wrapper` package is **self-contained**: it runs on bare Termux without
 the Termux `glibc` or `ca-certificates-glibc` packages. Packaging is bin-only (single
@@ -103,7 +103,7 @@ resolve the conflict by replacing the other provider.
   `opencode-<ver>-1-aarch64.pkg.tar.*`,
   raw binary `opencode-<ver>-aarch64-android-native`, plus
   `opencode-<ver>-report.json` and `opencode-<ver>-watcher.tar.gz`
-- glibc appendix (renamed `opencode-wrapper`): `opencode-wrapper_<ver>_aarch64.deb`,
+- wrapper appendix (renamed `opencode-wrapper`): `opencode-wrapper_<ver>_aarch64.deb`,
   `opencode-wrapper-<ver>-1-aarch64.pkg.tar.*`
 - compressed variant: `opencode-compressed_<ver>_aarch64.deb`,
   `opencode-compressed-<ver>-1-aarch64.pkg.tar.*`
@@ -123,7 +123,7 @@ resolve the conflict by replacing the other provider.
 
 | Tag | plain `opencode_*` 归属 | 证据（大小 + 家族标记） | 备注 |
 |---|---|---|---|
-| `Push260906` | **native 主线（当前 Latest）** | 92 资产；标题 `v1.18.27 v1.18.[15-26]`；native/compressed/glibc 三家族齐全 | **推荐下载 tag**（正式 Latest） |
+| `Push260906` | **native 主线（当前 Latest）** | 92 资产；标题 `v1.18.27 v1.18.[15-26]`；native/compressed/wrapper 三家族齐全 | **推荐下载 tag**（正式 Latest） |
 | `Push260905` | native 主线 | `opencode_1.18.15~27_aarch64.deb` 约 40.0~40.1MB；`opencode-wrapper_*` 82.4MB 同现；pacman 对应约 40.0~40.1MB | 上一个正式 tag；被 Push260906 取代 |
 | `Push260903`（rc2 批次） | native 主线（**已降级批次**） | plain deb 40.1~40.7MB；`opencode-wrapper_*` 同现 | release 标题标注 `[demoted: TUI patch insufficient]`，**勿从此 tag 下载** |
 | `Push260828` | **native 主线（分界点）** | `opencode_1.18.21_aarch64.deb` 40.7MB；`opencode-wrapper_1.18.15_*` 82.4MB、`opencode-wrapper-standalone_*` 41.3MB、`opencode-compressed_*` 50.4MB 同现 | 包名更名后首个正式 tag（Latest） |
@@ -140,5 +140,28 @@ resolve the conflict by replacing the other provider.
 
 ### 当前安装指引
 
-- 安装一律取 `Push260906`（或更新的 tag）：native 主线下 `opencode_<v>_aarch64.deb` / `opencode-<v>-1-aarch64.pkg.tar.xz`；glibc 附录下 `opencode-wrapper_<v>_aarch64.deb` / `opencode-wrapper-<v>-1-aarch64.pkg.tar.xz`；压缩变体 `opencode-compressed_*`；UPX 运行时资产 `opencode-native-<v>-upx.xz`。
+- 安装一律取 `Push260906`（或更新的 tag）：native 主线下 `opencode_<v>_aarch64.deb` / `opencode-<v>-1-aarch64.pkg.tar.xz`；wrapper 附录下 `opencode-wrapper_<v>_aarch64.deb` / `opencode-wrapper-<v>-1-aarch64.pkg.tar.xz`；压缩变体 `opencode-compressed_*`；UPX 运行时资产 `opencode-native-<v>-upx.xz`。
 - 勿从 `Push260903`（降级批次）下载任何资产。
+
+## v2.0.0 GA 替换说明（2026-09-21）
+
+opencode 2.0.0 是全线替换版本（GA mainline），v1.18.31 为 v1 最终封版。
+
+| | v1（1.18.31 封版） | v2（2.0.0 GA） |
+|---|---|---|
+| 构建线 | A 线（transplant 复活） | **B 线（android bun 源码编译）** |
+| 包名 | `opencode`（native）/ `opencode-wrapper`（glibc） | 同 v1（继承包名） |
+| TUI | ✅ | ✅（B 线构建） |
+| 插件 | V1 格式 | **V2 不兼容 V1** |
+
+### v1 包名变更（条件性）
+
+如果后续 v1 出新版本需维护，包名从 `opencode*` 改为 `opencode1*`，与 v2 互斥。
+
+### v1 wrapper standalone 弃用
+
+`opencode-wrapper-standalone`（单版本冻结回退包）已弃用，不再发布新版本。
+
+- v1.18.31 是最后一个含 standalone 资产的 Release（Push260912）
+- 如果需要回退，直接安装 v1.18.31 的 `opencode` 或 `opencode-wrapper` 包
+- standalone 包与 `opencode` 可共存的特性不再维护

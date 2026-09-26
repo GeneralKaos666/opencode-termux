@@ -10,6 +10,8 @@ PACKAGER_NAME ?= Hope2333(幽零小喵) <u0catmiao@proton.me>
 MORE ?=
 ODIR ?=
 MIX ?= 0
+# Pacman packaging is optional: skip (WARN) when makepkg is absent.
+HAVE_MAKEPKG := $(shell command -v makepkg >/dev/null 2>&1 && echo 1 || echo 0)
 
 # Release upload target variables
 TAG ?= Push$(shell date +%y%m%d)
@@ -20,24 +22,24 @@ NATIVE ?=
 VER_IS_SET = $(filter-out file default,$(origin VER))
 NATIVE_VER = $(if $(VER_IS_SET),$(VER),$(VERS))
 NATIVE_DIR = artifacts/transplant/$(NATIVE_VER)
-# family array knob: family=glibc,native,compressed (comma or space separated, order preserved)
+# family array knob: family=wrapper,native,compressed (comma or space separated, order preserved)
 comma := ,
 FAMILY_LIST = $(strip $(subst $(comma), ,$(family)))
 
 OUTPUT_ROOT := $(if $(ODIR),$(ODIR),$(CURDIR)/packing)
 
-.PHONY: help all runtime stage deb pacman deb-native pacman-native native-pkg batch clean status steps matrix selfcheck release-upload test transplant transplant-predict transplant-check transplant-upx seccomp-harden family-glibc family-native family-compressed deb-compressed pacman-compressed range-build fleet-upx fleet-status sha-stage push-stage clean-artifacts
+.PHONY: help all runtime stage deb pacman deb-native pacman-native native-pkg batch clean status steps matrix selfcheck release-upload test transplant transplant-predict transplant-check transplant-upx seccomp-harden family-wrapper family-native family-compressed deb-compressed pacman-compressed range-build fleet-upx fleet-status sha-stage push-stage clean-artifacts
 
 help:
 	@echo "OpenCode Termux build helper"
 	@echo
 	@echo "━━━ [Families] Single-version per-family builds ━━━"
-	@echo "  make family-glibc VER=1.18.21       # glibc wrapper (deb + pacman)"
+	@echo "  make family-wrapper VER=1.18.21       # wrapper (deb + pacman)"
 	@echo "  make family-native VER=1.18.21      # transplant + seccomp-harden + native pkgs"
 	@echo "  make family-compressed VER=1.18.21  # UPX-compressed variant (local)"
 	@echo
 	@echo "━━━ [Range Batch] Multi-version builds ━━━"
-	@echo "  make range-build FROM=1.18.15 TO=1.18.27 LINES=glibc,native"
+	@echo "  make range-build FROM=1.18.15 TO=1.18.27 LINES=wrapper,native"
 	@echo "    Features: continue-on-fail, npm retry ≤3, disk guardrail, SHA256SUMS"
 	@echo
 	@echo "━━━ [Fleet] Distributed UPX ━━━"
@@ -64,7 +66,7 @@ help:
 	@echo
 	@echo "━━━ [Housekeeping] ━━━"
 	@echo "  make clean-artifacts VER=1.18.21   # remove transplant artifacts"
-	@echo "  make clean                          # remove glibc staging"
+	@echo "  make clean                          # remove wrapper staging"
 	@echo
 	@echo "━━━ [Transplant Notes] ━━━"
 	@echo "  section-format graphs require android Bun base >= 1.4.0"
@@ -92,11 +94,39 @@ all: clean runtime stage
 	if [ "$(PKG)" = "deb" ]; then \
 		$(MAKE) deb VERSION=$$V; \
 	elif [ "$(PKG)" = "pacman" ]; then \
-		$(MAKE) pacman VERSION=$$V; \
+		if [ "$(HAVE_MAKEPKG)" = "1" ]; then $(MAKE) pacman VERSION=$$V; else echo "WARN: makepkg not found; skipping pacman packaging"; fi; \
 	else \
-		$(MAKE) deb VERSION=$$V && $(MAKE) pacman VERSION=$$V; \
+		$(MAKE) deb VERSION=$$V; \
+		if [ "$(HAVE_MAKEPKG)" = "1" ]; then $(MAKE) pacman VERSION=$$V; else echo "WARN: makepkg not found; skipping pacman packaging"; fi; \
 	fi
 
+
+batch-v2:
+	@if [ -z "$(VERS)" ]; then \
+		echo "Error: VERS is empty. Example: make batch-v2 VERS='2.0.[0-12]' PKG=both"; \
+		exit 1; \
+	fi
+	@expanded=(); \
+	for token in $(VERS); do \
+		if [[ "$$token" =~ ^([0-9]+\.[0-9]+)\.\[([0-9]+)-([0-9]+)\]$$ ]]; then \
+			base="$${BASH_REMATCH[1]}"; start="$${BASH_REMATCH[2]}"; end="$${BASH_REMATCH[3]}"; \
+			for ((i=start; i<=end; i++)); do expanded+=("$$base.$$i"); done; \
+		else \
+			expanded+=("$$token"); \
+		fi; \
+	done; \
+	for v in "$${expanded[@]}"; do \
+		echo "=== Batch v2 build for version $$v ==="; \
+		if [ "$(PKG)" = "both" ] || [ "$(PKG)" = "native" ]; then \
+			$(MAKE) family-v2-native VER=$$v || exit 1; \
+		fi; \
+		if [ "$(PKG)" = "both" ] || [ "$(PKG)" = "compressed" ]; then \
+			$(MAKE) family-v2-compressed VER=$$v || exit 1; \
+		fi; \
+		if [ "$(PKG)" = "both" ] || [ "$(PKG)" = "wrapper" ]; then \
+			$(MAKE) family-v2-wrapper VER=$$v || exit 1; \
+		fi; \
+	done
 batch:
 	@if [ -z "$(VERS)" ]; then \
 		echo "Error: VERS is empty. Example: make batch VERS='1.2.10 1.2.11' PKG=both"; \
@@ -149,15 +179,17 @@ pacman:
 	fi
 
 # Native provider packaging (transplant revival line, stable mainline since 27/28).
-# Provides the same `opencode` command as the glibc wrapper packages; the two
-# providers conflict (installing one replaces the other). The glibc wrapper line is now the appendix (renamed opencode-wrapper); native is the stable mainline.
+# Provides the same `opencode` command as the wrapper packages; the two
+# providers conflict (installing one replaces the other). The wrapper line is now the appendix (renamed opencode-wrapper); native is the stable mainline.
 deb-native:
 	@if [ -z "$(VER_IS_SET)" ]; then \
 		echo "Error: VER is required. Example: make deb-native VER=1.18.21"; \
 		exit 1; \
 	fi
 	rm -rf packing/dpkg-native/work
-	MAINTAINER='$(PACKAGER_NAME)' VERSION='$(VER)' ./scripts/package/package_deb_native.sh
+	@ROOT="$(TRANSPLANT_ROOT)"; \
+	if [ -z "$$ROOT" ] && [ -d "$(CURDIR)/artifacts/build/$(VER)" ]; then ROOT="$(CURDIR)/artifacts/build"; fi; \
+	TRANSPLANT_ROOT="$$ROOT" MAINTAINER='$(PACKAGER_NAME)' VERSION='$(VER)' ./scripts/package/package_deb_native.sh
 	@if [ "$(OUTPUT_ROOT)" != "$(CURDIR)/packing" ]; then \
 		if [ "$(MIX)" = "1" ]; then \
 			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/dpkg-native/opencode_[0-9]*.deb "$(OUTPUT_ROOT)/"; \
@@ -172,7 +204,9 @@ pacman-native:
 		exit 1; \
 	fi
 	rm -rf packing/pacman/pkg packing/pacman/src
-	PACKAGER_NAME='$(PACKAGER_NAME)' VERSION='$(VER)' ./scripts/package/package_pacman_native.sh
+	@ROOT="$(TRANSPLANT_ROOT)"; \
+	if [ -z "$$ROOT" ] && [ -d "$(CURDIR)/artifacts/build/$(VER)" ]; then ROOT="$(CURDIR)/artifacts/build"; fi; \
+	TRANSPLANT_ROOT="$$ROOT" PACKAGER_NAME='$(PACKAGER_NAME)' VERSION='$(VER)' ./scripts/package/package_pacman_native.sh
 	@if [ "$(OUTPUT_ROOT)" != "$(CURDIR)/packing" ]; then \
 		if [ "$(MIX)" = "1" ]; then \
 			mkdir -p "$(OUTPUT_ROOT)" && cp -f packing/pacman/opencode-[0-9]*.pkg.* "$(OUTPUT_ROOT)/"; \
@@ -202,7 +236,7 @@ matrix:
 	@VERS='$(VERS)' ODIR='$(ODIR)' TARGET_HOST='$(TARGET_HOST)' TARGET_PORT='$(TARGET_PORT)' TARGET_USER='$(TARGET_USER)' ./tools/upgrade-matrix.sh
 
 # transplant: build native android binary via transplant pipeline
-# (tools/transplant/transplant.py, zero-glibc native-android path)
+# (tools/transplant/transplant.py, zero-wrapper native-android path)
 # Output: artifacts/transplant/<ver>/opencode-native + report.json
 # bun-base pairing is resolved internally from tools/transplant/config/bun-bind.json
 # (min_base_for_section: section-format graphs require android Bun base >= 1.4.0;
@@ -242,11 +276,16 @@ transplant:
 # symbol-range guard scan + dlopen hostile-FFI harness -> install to slot.
 # LIBOPENTUI_OPTIONAL=1 downgrades a build failure to a WARN (quarantine path
 # for toolchain-less environments); default is loud.
+# The v2 B-line builds against the OpenTUI fork work tree (packages/native);
+# override LIBOPENTUI_ZIG_DIR / ZIG_BIN for other trees.
+LIBOPENTUI_ZIG_DIR ?= $(HOME)/opentui/.work/opentui/packages/native
+LIBOPENTUI_ZIG_BIN ?= $(HOME)/zig-aarch64-linux-0.16.0/zig
 libopentui:
 	@if [ -f artifacts/transplant/opentui-bionic/libopentui.so ] && \
 	    bash tools/transplant/build-libopentui.sh --check artifacts/transplant/opentui-bionic/libopentui.so; then \
 		echo "==> libopentui: guard-verified .so present"; \
-	elif bash tools/transplant/build-libopentui.sh; then \
+	elif OPENTUI_ZIG_DIR="$(LIBOPENTUI_ZIG_DIR)" ZIG_BIN="$(LIBOPENTUI_ZIG_BIN)" \
+	    bash tools/transplant/build-libopentui.sh; then \
 		echo "==> libopentui: built + guard-verified via common layer"; \
 	elif [ "$(LIBOPENTUI_OPTIONAL)" = "1" ]; then \
 		echo "WARN: libopentui build failed -> transplant will quarantine (tui:absent)"; \
@@ -322,6 +361,9 @@ transplant-upx: UPX_OPTS?= --best
 # toolchain is missing; idempotent (already-hardened products are detected).
 # Runs automatically inside `transplant` after the TUI swap; MUST run BEFORE
 # transplant-upx (upx packing hides the dynamic section).
+# Product resolution: $(NATIVE_DIR) (A-line transplant) when it holds a product,
+# else auto-detects the v2 B-line product at artifacts/build/<ver>/ so
+# `make seccomp-harden VER=<x>` works for both lines.
 seccomp-harden:
 	@if [ -z "$(VER)" ]; then \
 		echo "Error: VER is empty. Example: make seccomp-harden VER=1.18.21"; \
@@ -335,32 +377,33 @@ seccomp-harden:
 		echo "WARN: tools/shim/sigsys_handler.c or tools/transplant/crhandler_patch.py missing; skipping seccomp hardening"; \
 		exit 0; \
 	fi
-	@SRC="$(SRC)"; \
+	@SRC="$(SRC)"; DIR="$(NATIVE_DIR)"; \
+	if [ -z "$$SRC" ] && [ ! -f "$$DIR/opencode-native-tui" ] && [ ! -f "$$DIR/opencode-native-revived" ] \
+	    && [ -f "$(CURDIR)/artifacts/build/$(NATIVE_VER)/opencode-native-revived" ]; then \
+		DIR="$(CURDIR)/artifacts/build/$(NATIVE_VER)"; \
+	fi; \
 	if [ -z "$$SRC" ]; then \
-		if [ -f $(NATIVE_DIR)/opencode-native-tui ]; then SRC=$(NATIVE_DIR)/opencode-native-tui; \
-		elif [ -f $(NATIVE_DIR)/opencode-native-revived ]; then SRC=$(NATIVE_DIR)/opencode-native-revived; \
-		elif [ -f $(NATIVE_DIR)/opencode-native ]; then SRC=$(NATIVE_DIR)/opencode-native; \
+		if [ -f "$$DIR/opencode-native-tui" ]; then SRC="$$DIR/opencode-native-tui"; \
+		elif [ -f "$$DIR/opencode-native-revived" ]; then SRC="$$DIR/opencode-native-revived"; \
+		elif [ -f "$$DIR/opencode-native" ]; then SRC="$$DIR/opencode-native"; \
 		else \
-			echo "WARN: no revived product in $(NATIVE_DIR); skipping seccomp hardening"; \
+			echo "WARN: no revived product in $$DIR; skipping seccomp hardening"; \
 			exit 0; \
 		fi; \
 	fi; \
 	echo "==> seccomp-harden VER=$(VER) source=$$SRC"; \
-	clang -shared -fPIC -O2 -o $(NATIVE_DIR)/libopencode-crhandler.so tools/shim/sigsys_handler.c || exit 1; \
+	clang -shared -fPIC -O2 -o "$$DIR/libopencode-crhandler.so" tools/shim/sigsys_handler.c || exit 1; \
 	if grep -aqF libopencode-crhandler.so "$$SRC"; then \
 		echo "==> seccomp-harden: $$SRC already hardened, skip (shim rebuilt)"; \
 		exit 0; \
 	fi; \
 	cp -p "$$SRC" "$$SRC.pre-crhandler" || exit 1; \
 	python3 tools/transplant/crhandler_patch.py "$$SRC" || exit 1; \
-	echo "seccomp-harden: pre-patch copy kept at $$SRC.pre-crhandler";
-	@# Post-patch sync: when tui was patched, ensure revived reflects the
-	@# hardened binary. transplant.py produces both tui and revived, but
-	@# seccomp-harden patches only the preferred source (typically tui).
-	if [ "$$SRC" = "$(NATIVE_DIR)/opencode-native-tui" ] && [ -f "$(NATIVE_DIR)/opencode-native-revived" ]; then \
-		if ! grep -aqF libopencode-crhandler.so "$(NATIVE_DIR)/opencode-native-revived"; then \
-			rm -f "$(NATIVE_DIR)/opencode-native-revived"; \
-			cp -p "$(NATIVE_DIR)/opencode-native-tui" "$(NATIVE_DIR)/opencode-native-revived"; \
+	echo "seccomp-harden: pre-patch copy kept at $$SRC.pre-crhandler"; \
+	if [ "$$SRC" = "$$DIR/opencode-native-tui" ] && [ -f "$$DIR/opencode-native-revived" ]; then \
+		if ! grep -aqF libopencode-crhandler.so "$$DIR/opencode-native-revived"; then \
+			rm -f "$$DIR/opencode-native-revived"; \
+			cp -p "$$DIR/opencode-native-tui" "$$DIR/opencode-native-revived"; \
 			echo "seccomp-harden: synced hardened tui -> revived"; \
 		fi; \
 	fi
@@ -374,15 +417,16 @@ transplant-check:
 # Grouped family targets (single-version per-family builds)
 # ══════════════════════════════════════════════════════════════════════
 
-# family-glibc: build glibc wrapper packages for a single version
-# Usage: make family-glibc VER=1.18.21
-family-glibc: runtime stage
+# family-wrapper: build wrapper packages for a single version
+# Usage: make family-wrapper VER=1.18.21
+family-wrapper: runtime stage
 	@if [ "$(PKG)" = "deb" ]; then \
 		$(MAKE) deb VER=$(VER); \
 	elif [ "$(PKG)" = "pacman" ]; then \
-		$(MAKE) pacman VER=$(VER); \
+		if [ "$(HAVE_MAKEPKG)" = "1" ]; then $(MAKE) pacman VER=$(VER); else echo "WARN: makepkg not found; skipping pacman packaging"; fi; \
 	else \
-		$(MAKE) deb VER=$(VER) && $(MAKE) pacman VER=$(VER); \
+		$(MAKE) deb VER=$(VER); \
+		if [ "$(HAVE_MAKEPKG)" = "1" ]; then $(MAKE) pacman VER=$(VER); else echo "WARN: makepkg not found; skipping pacman packaging"; fi; \
 	fi
 
 # family-native: transplant + seccomp-harden + native packages for a single version
@@ -393,7 +437,8 @@ family-native:
 		exit 1; \
 	fi
 	$(MAKE) transplant VER=$(VER)
-	$(MAKE) deb-native VER=$(VER) && $(MAKE) pacman-native VER=$(VER)
+	$(MAKE) deb-native VER=$(VER)
+	@if [ "$(HAVE_MAKEPKG)" = "1" ]; then $(MAKE) pacman-native VER=$(VER); else echo "WARN: makepkg not found; skipping pacman packaging"; fi
 
 # family-compressed: UPX-compressed variant (local build)
 # Usage: make family-compressed VER=1.18.21
@@ -404,27 +449,28 @@ family-compressed:
 	fi
 	$(MAKE) transplant VER=$(VER)
 	$(MAKE) transplant-upx VER=$(VER)
-	$(MAKE) deb-compressed VER=$(VER) && $(MAKE) pacman-compressed VER=$(VER)
+	$(MAKE) deb-compressed VER=$(VER)
+	@if [ "$(HAVE_MAKEPKG)" = "1" ]; then $(MAKE) pacman-compressed VER=$(VER); else echo "WARN: makepkg not found; skipping pacman packaging"; fi
 
 # family: array dispatcher over the three family chains (FEATURE: family as ARRAY)
-# Usage: make family=glibc,native,compressed VER=1.18.21   (comma or space separated)
-#        Order is preserved as given; canonical order is glibc -> native -> compressed.
+# Usage: make family=wrapper,native,compressed VER=1.18.21   (comma or space separated)
+#        Order is preserved as given; canonical order is wrapper -> native -> compressed.
 .PHONY: family
 family:
 	@if [ -z "$(VER_IS_SET)" ]; then \
-		echo "Error: VER is required. Example: make family=glibc,native VER=1.18.21"; \
+		echo "Error: VER is required. Example: make family=wrapper,native VER=1.18.21"; \
 		exit 1; \
 	fi
 	@if [ -z "$(FAMILY_LIST)" ]; then \
-		echo "Error: family is empty. Valid entries: glibc, native, compressed (comma or space separated)."; \
+		echo "Error: family is empty. Valid entries: wrapper, native, compressed (comma or space separated)."; \
 		exit 1; \
 	fi
 	@invalid=""; \
 	for f in $(FAMILY_LIST); do \
-		case "$$f" in glibc|native|compressed) ;; *) invalid="$$invalid $$f" ;; esac; \
+		case "$$f" in wrapper|native|compressed) ;; *) invalid="$$invalid $$f" ;; esac; \
 	done; \
 	if [ -n "$$invalid" ]; then \
-		echo "Error: unknown family:$$invalid (valid: glibc, native, compressed)"; \
+		echo "Error: unknown family:$$invalid (valid: wrapper, native, compressed)"; \
 		exit 1; \
 	fi
 	@for f in $(FAMILY_LIST); do \
@@ -495,28 +541,32 @@ deb-compressed:
 		echo "Error: VER is required. Example: make deb-compressed VER=1.18.21"; \
 		exit 1; \
 	fi
-	VERSION=$(VER) OPENCODE_COMPRESSED_BIN=$(NATIVE_DIR)/opencode-native-$(VER)-upx OPENCODE_CRHANDLER_SO=$(NATIVE_DIR)/libopencode-crhandler.so bash scripts/package/package_deb_compressed.sh
+	@bin="$${OPENCODE_COMPRESSED_BIN:-$(NATIVE_DIR)/opencode-native-$(VER)-upx}"; \
+	shim="$${OPENCODE_CRHANDLER_SO:-$(NATIVE_DIR)/libopencode-crhandler.so}"; \
+	VERSION=$(VER) OPENCODE_COMPRESSED_BIN="$$bin" OPENCODE_CRHANDLER_SO="$$shim" bash scripts/package/package_deb_compressed.sh
 
 pacman-compressed:
 	@if [ -z "$(VER_IS_SET)" ]; then \
 		echo "Error: VER is required. Example: make pacman-compressed VER=1.18.21"; \
 		exit 1; \
 	fi
-	VERSION=$(VER) OPENCODE_COMPRESSED_BIN=$(NATIVE_DIR)/opencode-native-$(VER)-upx OPENCODE_CRHANDLER_SO=$(NATIVE_DIR)/libopencode-crhandler.so bash scripts/package/package_pacman_compressed.sh
+	@bin="$${OPENCODE_COMPRESSED_BIN:-$(NATIVE_DIR)/opencode-native-$(VER)-upx}"; \
+	shim="$${OPENCODE_CRHANDLER_SO:-$(NATIVE_DIR)/libopencode-crhandler.so}"; \
+	VERSION=$(VER) OPENCODE_COMPRESSED_BIN="$$bin" OPENCODE_CRHANDLER_SO="$$shim" bash scripts/package/package_pacman_compressed.sh
 
 # Range batch build (multi-version, continue-on-fail)
 # ══════════════════════════════════════════════════════════════════════
 
 # range-build: build multiple versions across families with resilience
-# Usage: make range-build FROM=1.18.15 TO=1.18.27 LINES=glibc,native
+# Usage: make range-build FROM=1.18.15 TO=1.18.27 LINES=wrapper,native
 # Features: continue-on-fail, npm retry ≤3, disk guardrail, SHA256SUMS accumulation
 range-build:
 	@if [ -z "$(FROM)" ] || [ -z "$(TO)" ]; then \
-		echo "Error: FROM and TO are required. Example: make range-build FROM=1.18.15 TO=1.18.27 LINES=glibc,native"; \
+		echo "Error: FROM and TO are required. Example: make range-build FROM=1.18.15 TO=1.18.27 LINES=wrapper,native"; \
 		exit 1; \
 	fi
 	@if [ -z "$(LINES)" ]; then \
-		echo "Error: LINES is required (glibc,native[,compressed])"; \
+		echo "Error: LINES is required (wrapper,native[,compressed])"; \
 		exit 1; \
 	fi
 	bash scripts/range-build.sh FROM=$(FROM) TO=$(TO) LINES=$(LINES)
@@ -632,9 +682,9 @@ release-upload:
 	if ! gh release view "$(TAG)" --repo "$(REPO)" >/dev/null 2>&1; then \
 		echo "Creating release $(TAG)..."; \
 		if [ "$(NATIVE)" = "STABLE" ]; then \
-			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "OpenCode for Termux. Mainline (stable since 27/28): native bionic line - opencode-<ver>-aarch64-android-native / opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* - zero-glibc, full TUI, Android API>=28. Appendix (legacy): glibc wrapper packages opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.*." 2>&1 || exit 1; \
+			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "OpenCode for Termux. Mainline (stable since 27/28): native bionic line - opencode-<ver>-aarch64-android-native / opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* - zero-wrapper, full TUI, Android API>=28. Appendix (legacy): wrapper packages opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.*." 2>&1 || exit 1; \
 		else \
-			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "Dual-track OpenCode for Termux. Track 1 (glibc appendix, renamed opencode-wrapper): glibc wrapper packages opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.* - full TUI. Track 2 (native, stable mainline since 27/28): opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* / *-android-native assets - zero-glibc, full TUI (bionic libopentui.so, W10a 5/5), Android API>=28." 2>&1 || exit 1; \
+			gh release create "$(TAG)" --repo "$(REPO)" --title "$(TAG)" --notes "Dual-track OpenCode for Termux. Track 1 (wrapper appendix, renamed opencode-wrapper): wrapper packages opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.* - full TUI. Track 2 (native, stable mainline since 27/28): opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* / *-android-native assets - zero-wrapper, full TUI (bionic libopentui.so, W10a 5/5), Android API>=28." 2>&1 || exit 1; \
 		fi; \
 	else \
 		echo "Release $(TAG) exists; rebinding tag to HEAD via gh api (HTTPS, SSH 22 blocked)..."; \
@@ -648,7 +698,7 @@ release-upload:
 	done; \
 	mkdir -p "$(RELEASE_DIR)"; \
 	echo "--- Dual-track asset naming ---"; \
-	echo "    glibc wrapper line (appendix, renamed opencode-wrapper): opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.*"; \
+	echo "    wrapper line (appendix, renamed opencode-wrapper): opencode-wrapper_<ver>_aarch64.deb / opencode-wrapper-<ver>-aarch64.pkg.tar.*"; \
 	echo "    native line (stable mainline since 27/28): opencode-<ver>-aarch64-android-native / opencode_<ver>_aarch64.deb / opencode-<ver>-*-aarch64.pkg.* / opencode-<ver>-report.json / opencode-<ver>-watcher.tar.gz"; \
 	if [ "$(NATIVE)" = "1" ] || [ "$(NATIVE)" = "STABLE" ]; then \
 		cp "$(NATIVE_DIR)/opencode-native-revived" "$(RELEASE_DIR)/opencode-$(NATIVE_VER)-aarch64-android-native"; \
@@ -666,3 +716,170 @@ release-upload:
 	fi; \
 	if [ "$$upload_failed" -ne 0 ]; then echo "Error: one or more release assets failed to upload" >&2; exit 1; fi; \
 	echo "=== Done: https://github.com/$(REPO)/releases/tag/$(TAG) ==="
+
+# ══════════════════════════════════════════════════════════════════════
+# V2 (opencode 2.0.0 GA) — three-line build surface
+#
+# Identity: v2 replaces the v1 mainline (package name `opencode`). v1.18.31 is
+# pinned as the final v1 release. Future v1 maintenance (if any) moves to the
+# `opencode1*` package name, mutually exclusive with v2.
+#
+#   Line                TUI   Channel                     make entry
+#   ────────────────────────────────────────────────────────────────────
+#   B native (default)  ✅    android-bun source compile  family-v2-native
+#   B compressed        ✅    + UPX (standalone scheme)   family-v2-compressed
+#   Wrapper     ✅    bun-termux-loader wrap      family-v2-wrapper
+#   A+ reserve headless ⚠️    wrapper compile -> transplant family-v2-reserve
+#     (non-special use only; TUI unavailable — documented upstream bun bug)
+#
+# Packaging reuses the v1 provider scripts verbatim by overriding
+# TRANSPLANT_ROOT=artifacts/build (B line normalizes products to the
+# opencode-native-revived / -upx contract names).
+# ══════════════════════════════════════════════════════════════════════
+
+# B-line source roots (env overridable)
+V2_SRC ?=
+V2_BUILD_ROOT ?= artifacts/build
+V2_WRAP_ROOT ?= artifacts/wrapper
+V2_WRAPPER_STANDALONE ?= $(V2_WRAP_ROOT)/wrapper-standalone/opencode
+V2_LOADER_ROOT ?= $(shell if [ -d $(HOME)/bun-termux-loader ]; then echo $(HOME)/bun-termux-loader; else echo $(HOME)/.local/share/bun-termux-loader; fi)
+
+# build-native: B-line compile (android bun) -> artifacts/build/<ver>/opencode-native-revived
+# Usage: make build-native VER=2.0.0 [V2_SRC=...] [OPENTUI_REBUILD=1]
+.PHONY: build-native
+build-native:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make build-native VER=2.0.0"; \
+		exit 1; \
+	fi
+	VER=$(VER) V2_SRC='$(V2_SRC)' bash scripts/build-bionic.sh
+
+# build-native-upx: UPX-compress the B-line product (optional final step)
+.PHONY: build-native-upx
+build-native-upx:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make build-native-upx VER=2.0.0"; \
+		exit 1; \
+	fi
+	@src="artifacts/build/$(VER)/opencode-native-revived"; \
+	if [ ! -f "$$src" ]; then echo "Error: $$src missing; run 'make build-native VER=$(VER)' first"; exit 1; fi; \
+	cp -p "$$src" "artifacts/build/$(VER)/opencode-native-revived-upx"; \
+	upx $(UPX_OPTS) --no-color "artifacts/build/$(VER)/opencode-native-revived-upx"; \
+	sha256sum "artifacts/build/$(VER)/opencode-native-revived-upx" | awk '{print $$1}' > "artifacts/build/$(VER)/build-upx.sha256"; \
+	echo "==> upx: artifacts/build/$(VER)/opencode-native-revived-upx ($$(stat -c%s artifacts/build/$(VER)/opencode-native-revived-upx) B)"
+build-native-upx: UPX_OPTS?=
+
+# family-v2-native: B-line compile + native deb/pacman (v1 provider scripts)
+# Usage: make family-v2-native VER=2.0.0
+.PHONY: family-v2-native
+family-v2-native:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make family-v2-native VER=2.0.0"; \
+		exit 1; \
+	fi
+	$(MAKE) --no-print-directory build-native VER=$(VER) V2_SRC='$(V2_SRC)'
+	TRANSPLANT_ROOT=$(CURDIR)/artifacts/build $(MAKE) --no-print-directory deb-native VER=$(VER)
+	@if [ "$(HAVE_MAKEPKG)" = "1" ]; then \
+		TRANSPLANT_ROOT=$(CURDIR)/artifacts/build $(MAKE) --no-print-directory pacman-native VER=$(VER); \
+	else \
+		echo "WARN: makepkg not found; skipping pacman-native (deb built)"; \
+	fi
+
+# family-v2-compressed: B-line + UPX + compressed deb/pacman (v1 standalone scheme)
+# Usage: make family-v2-compressed VER=2.0.0
+.PHONY: family-v2-compressed
+family-v2-compressed:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make family-v2-compressed VER=2.0.0"; \
+		exit 1; \
+	fi
+	$(MAKE) --no-print-directory build-native VER=$(VER) V2_SRC='$(V2_SRC)'
+	$(MAKE) --no-print-directory harden-native VER=$(VER)
+	$(MAKE) --no-print-directory build-native-upx VER=$(VER)
+	TRANSPLANT_ROOT=$(CURDIR)/artifacts/build OPENCODE_COMPRESSED_BIN=$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived-upx OPENCODE_CRHANDLER_SO=$(CURDIR)/artifacts/build/$(VER)/libopencode-crhandler.so $(MAKE) --no-print-directory deb-compressed VER=$(VER)
+	@if [ "$(HAVE_MAKEPKG)" = "1" ]; then \
+		TRANSPLANT_ROOT=$(CURDIR)/artifacts/build OPENCODE_COMPRESSED_BIN=$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived-upx OPENCODE_CRHANDLER_SO=$(CURDIR)/artifacts/build/$(VER)/libopencode-crhandler.so $(MAKE) --no-print-directory pacman-compressed VER=$(VER); \
+	else \
+		echo "WARN: makepkg not found; skipping pacman-compressed (deb built)"; \
+	fi
+
+# harden-native: seccomp-harden the B-line product (v1 crhandler zero-displacement
+# patch chain): compile tools/shim/sigsys_handler.c into artifacts/build/<ver>/,
+# patch opencode-native-revived in place (DT_NEEDED[0]="libopencode-crhandler.so",
+# pre-patch copy kept as *.pre-crhandler). MUST run BEFORE build-native-upx.
+# Usage: make harden-native VER=2.0.0
+.PHONY: harden-native
+harden-native:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make harden-native VER=2.0.0"; \
+		exit 1; \
+	fi
+	@if ! command -v clang >/dev/null 2>&1; then echo "WARN: clang not found; skipping seccomp hardening"; exit 0; fi
+	@src="$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived"; \
+	if [ ! -f "$$src" ]; then echo "Error: $$src missing; run 'make build-native VER=$(VER)' first"; exit 1; fi; \
+	echo "==> harden-native VER=$(VER)"; \
+	clang -shared -fPIC -O2 -o "$(CURDIR)/artifacts/build/$(VER)/libopencode-crhandler.so" tools/shim/sigsys_handler.c || exit 1; \
+	if grep -aqF libopencode-crhandler.so "$$src"; then \
+		echo "==> already hardened, skip"; \
+		exit 0; \
+	fi; \
+	cp -p "$$src" "$$src.pre-crhandler" || exit 1; \
+	python3 tools/transplant/crhandler_patch.py "$$src" || exit 1; \
+	echo "harden-native: pre-patch copy kept at $$src.pre-crhandler"
+
+
+# wrapper-native: bun-termux-loader wrap of the v2 wrapper standalone
+# Produces artifacts/wrapper/<ver>/opencode-wrapper-<ver> (bionic, TUI-capable)
+# Input: standalone wrapper ELF (from opencode.ai direct link / npm platform pkg).
+.PHONY: wrapper-native
+wrapper-native:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make wrapper-native VER=2.0.0"; \
+		exit 1; \
+	fi
+	@if [ ! -d "$(V2_LOADER_ROOT)" ]; then \
+		echo "Error: bun-termux-loader not found at $(V2_LOADER_ROOT) (clone https://github.com/emberglazee/bun-termux-loader)"; \
+		exit 1; \
+	fi
+	@if [ ! -x "$(V2_WRAPPER_STANDALONE)" ]; then \
+		echo "Error: wrapper standalone not found: $(V2_WRAPPER_STANDALONE)"; \
+		echo "  Place the v2 wrapper standalone ELF at $(V2_WRAP_ROOT)/wrapper-standalone/opencode"; \
+		exit 1; \
+	fi
+	@mkdir -p artifacts/wrapper/$(VER)
+	python3 $(V2_LOADER_ROOT)/build.py $(V2_WRAPPER_STANDALONE) artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) --wrapper $(V2_LOADER_ROOT)/wrapper --shim $(V2_LOADER_ROOT)/bunfs_shim.so
+	@sha256sum artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) | awk '{print $$1}' | tee artifacts/wrapper/$(VER)/wrapper.sha256
+	@echo "==> wrapper: artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) ($$(stat -c%s artifacts/wrapper/$(VER)/opencode-wrapper-$(VER)) B)"
+
+# family-v2-wrapper: wrap + version smoke (no packaging: wrapper line is
+# documented/reserve only for v2; shipping goes via native line)
+.PHONY: family-v2-wrapper
+family-v2-wrapper:
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make family-v2-wrapper VER=2.0.0"; \
+		exit 1; \
+	fi
+	$(MAKE) --no-print-directory wrapper-native VER=$(VER)
+	@echo "==> wrapper smoke:"
+	artifacts/wrapper/$(VER)/opencode-wrapper-$(VER) --version
+
+
+	@if [ -z "$(VER_IS_SET)" ]; then \
+		echo "Error: VER is required. Example: make harden-native VER=2.0.0"; \
+		exit 1; \
+	fi
+	@src="$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived"; \
+	if [ ! -f "$$src" ]; then \
+		echo "Error: $$src missing; run 'make build-native VER=$(VER)' first"; \
+		exit 1; \
+	fi; \
+	echo "==> harden-native VER=$(VER)"; \
+	clang -shared -fPIC -O2 -o "$(CURDIR)/artifacts/build/$(VER)/libopencode-crhandler.so" tools/shim/sigsys_handler.c || exit 1; \
+	@out="$(CURDIR)/artifacts/build/$(VER)/opencode-native-revived-crh"; \
+	if [ -f "$$out" ] && grep -aqF "libopencode-crhandler.so" "$$out"; then \
+		echo "==> already hardened, skip"; \
+		exit 0; \
+	fi; \
+	cp -p "$$src" "$$out" || exit 1; \
+	python3 tools/transplant/toolchain/crhandler_patch.py "$$out" || exit 1; \
+	echo "harden-native: hardened COPY at $$out; main product $$src pristine"

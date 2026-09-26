@@ -4,7 +4,7 @@
 **Branch:** pure-android
 
 ## OVERVIEW
-Termux-first OpenCode build/packaging workspace. Stable mainline since 27/28 is the native bionic line: a single zero-glibc Android ELF produced by the transplant revive pipeline (`tools/transplant/`, `make transplant`; see `docs/transplant.md`). The glibc wrapper line is renamed `opencode-wrapper` and demoted to appendix maintenance (local build path `tools/produce-local.sh` + `scripts/*`); `opencode-wrapper-standalone` is the frozen single-version rollback package that can coexist with `opencode`. `opencode` and `opencode-wrapper` remain mutually exclusive. GitHub Actions workflows are diagnostic/handoff, not final runtime release.
+Termux-first OpenCode build/packaging workspace. Stable mainline since 27/28 is the native bionic line: a single zero-glibc Android ELF produced by the transplant revive pipeline (`tools/transplant/`, `make transplant`; see `docs/transplant.md`). The wrapper line is renamed `opencode-wrapper` and demoted to appendix maintenance (local build path `tools/produce-local.sh` + `scripts/*`); `opencode-wrapper-standalone` is the frozen single-version rollback package that can coexist with `opencode`. `opencode` and `opencode-wrapper` remain mutually exclusive. GitHub Actions workflows are diagnostic/handoff, not final runtime release.
 
 ## STRUCTURE
 ```text
@@ -24,8 +24,8 @@ opencode-termux/
 | Build orchestration | `Makefile`, `tools/make-opencode` | `make` is source of truth; wrapper maps CLI flags to make vars |
 | Prepare runtime artifact | `tools/produce-local.sh` | resolves version, wraps runtime, cleans stale generated dirs |
 | Stage install tree | `scripts/build.sh`, `scripts/common.sh` | writes staged prefix + build metadata |
-| Build DEB package (glibc appendix) | `scripts/package/package_deb.sh`, `packing/deb/DEBIAN/control` | builds the `opencode-wrapper` deb; postinst hook calls system-skill runner |
-| Build pacman package (glibc appendix) | `scripts/package/package_pacman.sh`, `packing/pacman/PKGBUILD*` | builds the `opencode-wrapper` pacman package; dynamic pkgver/pkgrel rewrite + makepkg flow |
+| Build DEB package (wrapper appendix) | `scripts/package/package_deb.sh`, `packing/deb/DEBIAN/control` | builds the `opencode-wrapper` deb; postinst hook calls system-skill runner |
+| Build pacman package (wrapper appendix) | `scripts/package/package_pacman.sh`, `packing/pacman/PKGBUILD*` | builds the `opencode-wrapper` pacman package; dynamic pkgver/pkgrel rewrite + makepkg flow |
 | Native provider packaging | `scripts/package/package_deb_native.sh`, `scripts/package/package_pacman_native.sh`, `packing/pacman/PKGBUILD.native` | `opencode-native` deb/pacman providers for the native bionic mainline (stable since 27/28; see docs/dual-track-install.md) |
 | Standalone rollback packaging | `scripts/package/package_deb_standalone.sh`, `scripts/package/package_pacman_standalone.sh`, `packing/pacman/PKGBUILD.standalone` | `opencode-wrapper-standalone` frozen rollback package (coexists with `opencode`); stage via `STANDALONE=1 ./scripts/build.sh` |
 | System-skill hook behavior | `scripts/hooks/run-system-skills.sh`, `packing/manifests/system-skills/*.json` | strict/network flags default to safe mode |
@@ -82,3 +82,5 @@ make matrix VERS='1.2.9 1.2.10' TARGET_HOST=192.168.1.22 TARGET_USER=u0_a258
 ## NOTES
 - `packing/` (default outputs) and `packing/` (templates/manifests) are different; keep them conceptually separate.
 - When adding new workflow-critical scripts, update both `docs/README.md` navigation and this root map.
+- Pacman packaging is optional: scripts and the Makefile auto-skip with a WARN when `makepkg` is absent (deb is the local default). See `scripts/package/package_pacman*.sh`.
+- `make build-native` hard-fails if the product would embed a glibc `libopentui.so` (pre- and post-compile assertions in `scripts/build-bionic.sh`); the bionic `.so` is deployed to every `node_modules` copy before compile.

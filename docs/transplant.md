@@ -69,6 +69,7 @@
 |---|---|---|
 | #4 | `serve` 报 `Configuration is invalid` | 配置 schema 版本差异所致，见下方「serve 故障排查注记」 |
 | #1 | 启动 ~1s 量级（`--version` 首试 1965ms） | 归因 Phase B bootstrap ~220ms + Phase C JS 求值 ~820ms；<300ms 目标需上游 Bun 改造，当前不可达（W3 报告），按 ~1s 现实验收 |
+| #v2-TUI | v2.0.0 TUI 崩溃：bun `getenv_z` 在 HTTP 客户端 DNS 路径段错误（`Segmentation fault at address 0x40`，bun.report 签名 Aa1744846…）。Headless 路径可用。 |
 | #7 | 冷启动 ~2s 量级（首测 2423ms） | module graph 全量解析慢；随上游优化跟进 |
 
 现状补充：以上为诚实性能边界，非阻塞项；体积 ~180MB；TUI 已可用（见状态横幅）。

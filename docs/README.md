@@ -13,6 +13,7 @@ This directory is the single source of truth for the current Termux packing/runt
 - `incidents/2026-02-23-opencode-web-termux-so-avalanche.md` — `.so` snowball restart-storm RCA note
 - `local-production.md` — local final packaging policy and boundaries
 - `transplant.md` — native-android transplant pipeline (revived: dual-format revive + TUI + alpha channel)
+- `migration-v1-to-v2.md` — v1 → v2 升级/回退/包名/构建线迁移指南
 - `dual-track-install.md` — opencode provider selection (native mainline `opencode` vs appendix `opencode-wrapper`, full TUI)；包名时代分界（哪个 Push tag 的 `opencode` 资产属于哪个家族）→ [`dual-track-install.md#push-tag--包名家族分界`](./dual-track-install.md#push-tag--包名家族分界)
 - `plugin-management.md` — plugin install/update/rollback commands
 - `make-maintainer.md` — maintainer build/upload/cache operations (Make system doctrine, `tools/maintain.sh`, fleet push, cache cleanup)
@@ -58,8 +59,8 @@ This directory is the single source of truth for the current Termux packing/runt
 
 ## Install policy summary
 
-- Default path: the Make system is the highest-priority entry (`make family=glibc,native,compressed VER=<ver>`); individual tools are help-first.
+- Default path: the Make system is the highest-priority entry (`make family=wrapper,native,compressed VER=<ver>`); individual tools are help-first.
 - The native mainline `opencode` package has zero glibc runtime dependencies (Android API >= 28).
-- The glibc appendix `opencode-wrapper` package is self-contained (bash + ncurses only; no glibc/openssl-glibc packages needed).
+- The wrapper appendix `opencode-wrapper` package is self-contained (bash + ncurses only; no glibc/openssl-glibc packages needed).
 - Pacman path: Termux pacman environments use the same package families.
 - `glibc-runner` is optional fallback tooling (not a primary runtime dependency).

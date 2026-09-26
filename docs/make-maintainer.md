@@ -7,18 +7,18 @@ Maintainer-only targets and tools for release operations, fleet UPX orchestratio
 Run multiple family chains in order with a single command:
 
 ```bash
-make family=glibc,native,compressed VER=1.18.27
+make family=wrapper,native,compressed VER=1.18.27
 ```
 
 - Accepts comma or space separated family names
-- Valid families: `glibc`, `native`, `compressed`
-- Runs each family's full chain IN ORDER (glibc → native → compressed)
-- Backward compatible: `make family-glibc VER=...`, `make family-native VER=...`, `make family-compressed VER=...` still work
+- Valid families: `wrapper`, `native`, `compressed`
+- Runs each family's full chain IN ORDER (wrapper → native → compressed)
+- Backward compatible: `make family-wrapper VER=...`, `make family-native VER=...`, `make family-compressed VER=...` still work
 - Requires `VER` (errors if unset)
 
 ## Upload / Fleet Orchestration
 
-### Simple Upload (glibc / native)
+### Simple Upload (wrapper / native)
 
 Uploads `.deb` and `.pkg.tar.xz` directly from the make machine:
 
